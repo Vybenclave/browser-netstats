@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Browser Network Toolkit</title>
+<link rel="icon" href="data:,">
+<style>
+  :root{
+    /* page: dark emerald */
+    --bg:#07211b;
+    --bg-2:#0a2c23;
+    /* panels: tokyo night */
+    --panel:#1a1b26;
+    --panel-2:#24283b;
+    --field:#10121c;
+    --border:#2b3350;
+    --fg:#c0caf5;
+    --fg-dim:#a9b1d6;
+    --muted:#565f89;
+    /* accents */
+    --cyan:#7dcfff;
+    --magenta:#ff6ad5;
+    --blue:#7aa2f7;
+    --green:#9ece6a;
+    --red:#f7768e;
+    --grid:#404040;          /* 25% grey */
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    background:radial-gradient(1200px 820px at 72% -12%, var(--bg-2), var(--bg));
+    color:var(--fg);
+    display:flex;flex-direction:column;min-height:100%;
+  }
+  header{padding:20px 24px 8px}
+  h1{margin:0;font-size:19px;letter-spacing:.5px}
+  h1 .a{color:var(--cyan)}
+  h1 .b{color:var(--magenta)}
+  header p{margin:6px 0 0;font-size:12px;line-height:1.5;color:var(--muted);max-width:78ch}
+  .wrap{flex:1;display:flex;flex-direction:column;gap:14px;padding:14px 24px 20px;min-height:0}
+  .panel{background:var(--panel);border:1px solid var(--border);border-radius:10px}
+  .controls{padding:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  button{
+    font:inherit;font-size:12px;background:var(--panel-2);color:var(--fg-dim);
+    border:1px solid var(--border);border-radius:7px;padding:7px 12px;cursor:pointer;
+    transition:border-color .12s,color .12s,background .12s;
+  }
+  button:hover{border-color:var(--cyan);color:var(--fg)}
+  button.active{background:rgba(125,207,255,.14);border-color:var(--cyan);color:var(--cyan)}
+  button#toggle{border-color:var(--green);color:var(--green)}
+  button#toggle.stop{border-color:var(--red);color:var(--red)}
+  .sep{flex:1 1 12px}
+  input[type=text]{
+    font:inherit;font-size:12px;background:var(--field);color:var(--fg);
+    border:1px solid var(--border);border-radius:7px;padding:7px 10px;width:230px;
+  }
+  input[type=text]:focus{outline:none;border-color:var(--magenta)}
+  .stats{padding:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(124px,1fr));gap:10px}
+  .stat{background:var(--field);border:1px solid var(--border);border-radius:8px;padding:10px 12px}
+  .stat .k{font-size:10px;text-transform:uppercase;letter-spacing:.13em;color:var(--muted)}
+  .stat .v{font-size:20px;margin-top:4px;color:var(--fg);white-space:nowrap}
+  .stat .v.sm{font-size:13px}
+  .stat.loss .v{color:var(--magenta)}
+  .graph{flex:1;position:relative;min-height:220px;padding:8px}
+  canvas{width:100%;height:100%;display:block}
+  .legend{position:absolute;right:16px;top:14px;font-size:11px;color:var(--muted);display:flex;gap:14px}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:middle}
+  footer{padding:0 24px 18px;font-size:11px;color:var(--muted)}
+  footer a{color:var(--blue)}
+</style>
+</head>
+<body>
+<header>
+  <h1>Browser <span class="a">Network</span> <span class="b">Toolkit</span></h1>
+  <p>Times an HTTPS request to a regional endpoint from your browser, once every 500&nbsp;ms. This is
+     not ICMP &mdash; a browser can't send a real ping &mdash; so each value includes DNS/TLS/HTTP
+     overhead, and a request that errors or doesn't answer within 2&nbsp;s is counted as a lost packet.</p>
+</header>
+
+<div class="wrap">
+  <div class="panel controls">
+    <div id="targets" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+    <span class="sep"></span>
+    <input id="custom" type="text" placeholder="custom host or IP, e.g. 1.1.1.1" spellcheck="false" autocomplete="off">
+    <button id="useCustom">Use</button>
+    <button id="toggle">Start</button>
+    <button id="clear">Clear</button>
+  </div>
+
+  <div class="panel stats">
+    <div class="stat"><div class="k">Target</div><div class="v sm" id="s-target">&mdash;</div></div>
+    <div class="stat"><div class="k">Last</div><div class="v" id="s-last">&mdash;</div></div>
+    <div class="stat"><div class="k">Min / Avg / Max</div><div class="v sm" id="s-mam">&mdash;</div></div>
+    <div class="stat"><div class="k">Jitter</div><div class="v sm" id="s-jit">&mdash;</div></div>
+    <div class="stat"><div class="k">Total pings</div><div class="v" id="s-total">0</div></div>
+    <div class="stat loss"><div class="k">Packet loss</div><div class="v" id="s-loss">0.0%</div></div>
+  </div>
+
+  <div class="panel graph">
+    <div class="legend">
+      <span><i style="background:#7dcfff"></i>RTT</span>
+      <span><i style="background:#ff6ad5"></i>rolling avg / loss</span>
+    </div>
+    <canvas id="c"></canvas>
+  </div>
+</div>
+
+<footer>
+  <span id="foot">Idle.</span> &nbsp;&middot;&nbsp;
+  <a href="https://github.com/Vybenclave/browser-netstats">github.com/Vybenclave/browser-netstats</a>
+</footer>
+
+<script>
+(() => {
+  "use strict";
+
+  // One reachable HTTPS endpoint per AWS US region. They answer fast and
+  // don't need CORS because we only time an opaque (no-cors) request.
+  const TARGETS = [
+    { id:"us-east-1", label:"US East · N. Virginia",   host:"s3.us-east-1.amazonaws.com" },
+    { id:"us-east-2", label:"US East · Ohio",          host:"s3.us-east-2.amazonaws.com" },
+    { id:"us-west-1", label:"US West · N. California",  host:"s3.us-west-1.amazonaws.com" },
+    { id:"us-west-2", label:"US West · Oregon",         host:"s3.us-west-2.amazonaws.com" },
+  ];
+  const INTERVAL = 500;    // ms between pings
+  const TIMEOUT  = 2000;   // ms before a ping counts as lost
+  const MAXBARS  = 240;    // history kept on screen (~2 min)
+  const AVG_WIN  = 8;      // samples in the rolling-average line
+
+  const $ = s => document.querySelector(s);
+  const targetsEl = $("#targets");
+  const canvas = $("#c");
+  const ctx = canvas.getContext("2d");
+
+  let current = TARGETS[0];
+  let timer = null;
+  let running = false;
+
+  const samples = [];       // { rtt: number | null }  -- null = lost
+  let total = 0, lost = 0, sum = 0, okCount = 0;
+  let min = Infinity, max = 0;
+  let lastRtt = null, prevRtt = null, jitter = 0;
+
+  // ---- target buttons ----
+  TARGETS.forEach(t => {
+    const b = document.createElement("button");
+    b.textContent = t.label;
+    b.dataset.id = t.id;
+    b.addEventListener("click", () => selectTarget(t));
+    targetsEl.appendChild(b);
+  });
+
+  function selectTarget(t) {
+    current = t;
+    const known = TARGETS.some(x => x.id === t.id);
+    [...targetsEl.children].forEach(b => b.classList.toggle("active", known && b.dataset.id === t.id));
+    if (known) $("#custom").value = "";
+    $("#s-target").textContent = t.label;
+    resetStats();
+  }
+
+  function useCustom() {
+    let h = $("#custom").value.trim().replace(/^https?:\/\//i, "").replace(/\/.*$/, "");
+    if (!h) return;
+    selectTarget({ id:"custom:" + h, label:h, host:h });
+  }
+
+  function resetStats() {
+    samples.length = 0;
+    total = lost = sum = okCount = 0;
+    min = Infinity; max = 0;
+    lastRtt = prevRtt = null; jitter = 0;
+    updateStats();
+    render();
+  }
+
+  // ---- the probe ----
+  async function ping(host) {
+    const url = "https://" + host + "/?_bnt=" + Date.now();
+    const ac = new AbortController();
+    const to = setTimeout(() => ac.abort(), TIMEOUT);
+    const start = performance.now();
+    try {
+      await fetch(url, { mode:"no-cors", cache:"no-store", signal:ac.signal });
+      return performance.now() - start;
+    } catch (_) {
+      return null;                       // aborted or network error -> lost
+    } finally {
+      clearTimeout(to);
+    }
+  }
+
+  async function tick() {
+    const host = current.host;
+    const rtt = await ping(host);
+    if (current.host !== host) return;   // target switched mid-flight
+
+    total++;
+    if (rtt === null) {
+      lost++;
+      lastRtt = null;
+      samples.push({ rtt:null });
+    } else {
+      okCount++; sum += rtt;
+      if (rtt < min) min = rtt;
+      if (rtt > max) max = rtt;
+      if (prevRtt !== null) jitter += (Math.abs(rtt - prevRtt) - jitter) / Math.min(okCount, 16);
+      prevRtt = rtt;
+      lastRtt = rtt;
+      samples.push({ rtt });
+    }
+    if (samples.length > MAXBARS) samples.shift();
+    updateStats();
+    render();
+  }
+
+  function start() {
+    if (running) return;
+    running = true;
+    $("#toggle").textContent = "Stop";
+    $("#toggle").classList.add("stop");
+    $("#foot").textContent = "Pinging " + current.label + " every " + INTERVAL + " ms…";
+    tick();
+    timer = setInterval(tick, INTERVAL);
+  }
+
+  function stop() {
+    running = false;
+    clearInterval(timer);
+    timer = null;
+    $("#toggle").textContent = "Start";
+    $("#toggle").classList.remove("stop");
+    $("#foot").textContent = "Stopped.";
+  }
+
+  // ---- stats readout ----
+  function fmt(x) {
+    if (x === null || !isFinite(x)) return "—";
+    return (x < 10 ? x.toFixed(1) : Math.round(x)) + " ms";
+  }
+
+  function updateStats() {
+    const last = $("#s-last");
+    last.textContent = lastRtt === null && total ? "LOST" : fmt(lastRtt);
+    last.style.color = lastRtt === null && total ? "var(--magenta)" : "var(--cyan)";
+    $("#s-mam").textContent   = okCount ? fmt(min) + " / " + fmt(sum / okCount) + " / " + fmt(max) : "—";
+    $("#s-jit").textContent   = okCount > 1 ? fmt(jitter) : "—";
+    $("#s-total").textContent = total;
+    $("#s-loss").textContent  = (total ? lost / total * 100 : 0).toFixed(1) + "%";
+  }
+
+  // ---- graph ----
+  function niceMax(v) {
+    const steps = [50,100,150,200,300,400,500,750,1000,1500,2000];
+    for (const s of steps) if (v <= s) return s;
+    return Math.ceil(v / 1000) * 1000;
+  }
+
+  function render() {
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    if (!w || !h) return;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+
+    const padL = 46, padR = 10, padT = 12, padB = 18;
+    const gw = w - padL - padR, gh = h - padT - padB;
+
+    const okv = [];
+    for (const s of samples) if (s.rtt !== null) okv.push(s.rtt);
+    const peak = okv.length ? Math.max.apply(null, okv) : 0;
+    const scaleMax = niceMax(Math.max(50, peak));
+
+    // grid + y-axis labels (25% grey)
+    ctx.font = "10px ui-monospace, monospace";
+    ctx.textBaseline = "middle";
+    const rows = 4;
+    for (let i = 0; i <= rows; i++) {
+      const y = padT + gh * (i / rows);
+      ctx.strokeStyle = "#404040";
+      ctx.globalAlpha = i === rows ? 0.65 : 0.35;
+      ctx.beginPath();
+      ctx.moveTo(padL, y);
+      ctx.lineTo(w - padR, y);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = "#565f89";
+      ctx.fillText(Math.round(scaleMax * (1 - i / rows)), 6, y);
+    }
+
+    // per-ping vertical bars
+    const n = samples.length;
+    const slot = gw / MAXBARS;
+    const bw = Math.max(1, Math.min(6, slot * 0.7));
+    for (let i = 0; i < n; i++) {
+      const s = samples[i];
+      const x = padL + gw - (n - i) * slot + (slot - bw) / 2;
+      if (s.rtt === null) {
+        ctx.fillStyle = "#ff6ad5";
+        ctx.globalAlpha = 0.85;
+        ctx.fillRect(x, padT, bw, gh);
+        ctx.globalAlpha = 1;
+      } else {
+        const bh = Math.max(1, gh * Math.min(1, s.rtt / scaleMax));
+        ctx.fillStyle = "#7dcfff";
+        ctx.fillRect(x, padT + gh - bh, bw, bh);
+      }
+    }
+
+    // rolling-average line (magenta)
+    if (okv.length > 1) {
+      ctx.strokeStyle = "#ff6ad5";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      const acc = [];
+      let started = false;
+      for (let i = 0; i < n; i++) {
+        const s = samples[i];
+        if (s.rtt === null) continue;
+        acc.push(s.rtt);
+        if (acc.length > AVG_WIN) acc.shift();
+        let a = 0;
+        for (const v of acc) a += v;
+        a /= acc.length;
+        const x = padL + gw - (n - i) * slot + slot / 2;
+        const y = padT + gh - gh * Math.min(1, a / scaleMax);
+        started ? ctx.lineTo(x, y) : (ctx.moveTo(x, y), started = true);
+      }
+      ctx.stroke();
+    }
+
+    // baseline
+    ctx.strokeStyle = "#404040";
+    ctx.globalAlpha = 0.65;
+    ctx.beginPath();
+    ctx.moveTo(padL, padT + gh);
+    ctx.lineTo(w - padR, padT + gh);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  // ---- wiring ----
+  window.addEventListener("resize", render);
+  $("#toggle").addEventListener("click", () => (running ? stop() : start()));
+  $("#clear").addEventListener("click", resetStats);
+  $("#useCustom").addEventListener("click", useCustom);
+  $("#custom").addEventListener("keydown", e => { if (e.key === "Enter") useCustom(); });
+
+  selectTarget(TARGETS[0]);
+  render();
+})();
+</script>
+</body>
+</html>
