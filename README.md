@@ -5,13 +5,14 @@ Tokyo Night theme, cyan/magenta ping graph on a 25% grey grid.
 
 **Live page:** https://vybenclave.github.io/browser-netstats/
 
-Three tools, laid out as a card grid:
+Four tools, laid out as a card grid:
 
 | Tool | Where it runs | Exports |
 | ---- | ------------- | ------- |
 | **Ping** | timed in your browser (HTTPS round-trip) | CSV, last 60 s |
 | **Traceroute** | on a [Globalping](https://globalping.io) probe | CSV of the trace |
 | **DNS lookup** | on a Globalping probe (pick the resolver) | - |
+| **Web & TLS probe** | on a Globalping probe | - |
 
 ## Ping
 
@@ -86,6 +87,38 @@ automatically).
 Output shows the resolver that answered, the response code, query time, and an
 answer table (`name / type / ttl / data`).
 
+## Web & TLS probe
+
+Sends a `HEAD` from a Globalping probe to `host:port` for each port you list,
+and reports the HTTP status plus the **served certificate**: subject CN, SANs,
+issuer, validity window and days remaining (amber under 30 days, red once
+expired), key type/bits, cipher, TLS version, serial, and the SHA-256
+fingerprint. `trusted` vs `self-signed / name mismatch` comes from the probe's
+chain check - self-signed certs still parse fine (a browser would just refuse
+them), and connecting by IP usually shows a name mismatch.
+
+Common web-UI ports to try: **443**, **8443** (UniFi, pfSense), **8006**
+(Proxmox), **5001** (Synology DSM), **10000** (Webmin), **9090** (Cockpit),
+**2087** (WHM), 4443 / 7443 / 9443 (varies). `scheme` also does plain **HTTP**
+and **HTTP/2**.
+
+**Scan a range** (the fold-out) sweeps a `/28`-`/32` CIDR or an `a.b.c.d-e`
+range - 16 addresses max - for a reachable TLS server and lists the ones that
+answer.
+
+### What it can't do
+
+- **Private / LAN targets** (your actual router at `192.168.1.1`, a NAS on
+  `10.x`) - Globalping runs on the public internet and rejects RFC1918
+  addresses outright. A browser can't help either: it has no API for the peer
+  certificate, Private Network Access blocks page-to-LAN requests, and a
+  self-signed cert turns every probe into an indistinguishable failure.
+- **Non-web services** - SSH, SMTP, IMAP, RDP, SMB, VNC, database ports, SNMP,
+  etc. Neither a browser (the Fetch "bad ports" blocklist, no raw sockets) nor
+  Globalping (only ping / traceroute / mtr / dns / http measurements) can open
+  a raw TCP socket to grab a banner. HTTP(S) on any port, DNS, ICMP, and
+  traceroute are the whole menu - which is what these four tools cover.
+
 ## Run it
 
 No build step, no dependencies - just open `index.html`.
@@ -101,8 +134,8 @@ To serve it locally instead:
 python -m http.server -d browser-netstats 8080
 ```
 
-Ping works from `file://`; traceroute and DNS need network access to
-`api.globalping.io`.
+Ping works from `file://`; traceroute, DNS, and the web/TLS probe need network
+access to `api.globalping.io`.
 
 ## Configuration
 

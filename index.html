@@ -110,6 +110,23 @@
   .tbl tr:hover td{color:var(--fg)}
   pre.raw{margin-top:8px;max-height:150px;overflow:auto;background:#0b0d16;border:1px solid var(--border);
           border-radius:6px;padding:8px;font-size:10.5px;line-height:1.45;color:var(--fg-dim);white-space:pre}
+  code{background:var(--field);border:1px solid var(--border);border-radius:4px;padding:0 4px;font-size:10.5px}
+
+  .badge{display:inline-block;font-size:10px;padding:1px 6px;border-radius:5px;border:1px solid var(--border);
+         color:var(--fg-dim);white-space:nowrap}
+  .badge.ok{border-color:var(--green);color:var(--green)}
+  .badge.warn{border-color:var(--yellow);color:var(--yellow)}
+  .badge.err{border-color:var(--red);color:var(--red)}
+  .warn{color:var(--yellow)}
+
+  .svc{margin-top:8px;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+  .svc-h{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--field);
+         padding:6px 9px;font-size:11px;color:var(--fg-dim)}
+  .svc-h b{color:var(--fg)}
+  .kv{width:100%;border-collapse:collapse;font-size:11px}
+  .kv td{padding:3px 9px;border-top:1px solid rgba(255,255,255,.045);vertical-align:top}
+  .kv td:first-child{color:var(--dim);white-space:nowrap;width:104px}
+  .kv td:last-child{color:var(--fg-dim);word-break:break-all}
 
   footer{padding:0 24px 22px;font-size:11px;color:var(--muted)}
   footer a{color:var(--blue)}
@@ -119,10 +136,11 @@
 <header>
   <h1>Browser <span class="a">Network</span> <span class="b">Toolkit</span></h1>
   <p>A few network tools that run in the page. <b>Ping</b> is timed from your browser as an HTTPS
-     round-trip (not ICMP), once every 500&nbsp;ms. <b>Traceroute</b> and <b>DNS</b> can't run in a
-     browser directly, so they execute on a <a href="https://globalping.io">Globalping</a> probe
-     &mdash; which is also what lets DNS query any resolver you pick. Ping and traceroute results
-     export to CSV.</p>
+     round-trip (not ICMP), once every 500&nbsp;ms. <b>Traceroute</b>, <b>DNS</b>, and the
+     <b>web&nbsp;/&nbsp;TLS probe</b> can't run in a browser directly, so they execute on a
+     <a href="https://globalping.io">Globalping</a> probe &mdash; which is also what lets DNS query
+     any resolver, and what makes reading a certificate possible at all. Ping and traceroute
+     results export to CSV.</p>
 </header>
 
 <div class="grid">
@@ -257,6 +275,54 @@
     </div>
 
     <div class="out" id="dns-out"><div class="meta">no query yet.</div></div>
+  </section>
+
+  <!-- ==================== WEB / TLS ==================== -->
+  <section class="card" id="web">
+    <h2>Web &amp; TLS probe <span class="dot" id="web-dot"></span></h2>
+    <div class="sub">A HEAD request from a Globalping probe, one per port &mdash; reports the HTTP
+      status and the served certificate. Public hosts only: Globalping refuses private / RFC1918
+      addresses, and a browser can't read certificates at all.</div>
+
+    <div class="row">
+      <label class="fld grow">host / public ip
+        <input class="host" id="web-target" type="text" placeholder="e.g. example.com" spellcheck="false" autocomplete="off">
+      </label>
+      <label class="fld">scheme
+        <select id="web-proto">
+          <option>HTTPS</option><option>HTTP</option><option value="HTTP2">HTTP/2</option>
+        </select>
+      </label>
+    </div>
+    <div class="row">
+      <label class="fld grow">ports
+        <input class="host" id="web-ports" type="text" value="443, 8443, 8006, 5001, 10000" spellcheck="false" autocomplete="off">
+      </label>
+      <label class="fld">probe
+        <input class="from" id="web-from" type="text" value="US" spellcheck="false" autocomplete="off">
+      </label>
+    </div>
+    <div class="row">
+      <button class="btn go" id="web-run">Check</button>
+      <button class="btn" id="web-sweep-toggle" aria-expanded="false">Scan a range &#9656;</button>
+    </div>
+
+    <div id="web-sweep" hidden>
+      <div class="sub" style="margin-top:2px">Sweeps up to 16 addresses (a <code>/28</code>&ndash;<code>/32</code>
+        CIDR, or <code>a.b.c.d-e</code>) for a reachable TLS server. Public ranges only, and every
+        address spends probe quota (~250&nbsp;runs/hour) &mdash; keep it small.</div>
+      <div class="row">
+        <label class="fld grow">cidr / range
+          <input class="host" id="web-range" type="text" placeholder="203.0.113.0/29   or   203.0.113.1-14" spellcheck="false" autocomplete="off">
+        </label>
+        <label class="fld">ports
+          <input class="from" id="web-range-ports" type="text" value="443, 8443" spellcheck="false" autocomplete="off">
+        </label>
+        <button class="btn go" id="web-sweep-run">Sweep</button>
+      </div>
+    </div>
+
+    <div class="out" id="web-out"><div class="meta">no probe yet.</div></div>
   </section>
 
 </div>
@@ -757,6 +823,205 @@
 
   $("#dns-run").addEventListener("click", runDns);
   $("#dns-name").addEventListener("keydown", e => { if (e.key === "Enter") runDns(); });
+
+  // =====================================================================
+  //  WEB / TLS  -- HTTP(S) probe + certificate view, on a Globalping probe
+  // =====================================================================
+  const webOut = $("#web-out");
+
+  const cleanHost = s => s.trim()
+    .replace(/^[a-z][a-z0-9+.-]*:\/\//i, "")
+    .replace(/[/?#].*$/, "")
+    .replace(/:\d+$/, "")
+    .replace(/\.$/, "");
+  const parsePorts = (s, fb) => {
+    const p = [...new Set((s.match(/\d+/g) || []).map(Number).filter(n => n > 0 && n < 65536))];
+    return p.length ? p : fb;
+  };
+  const setBusy = (btn, dot, on) => { $(btn).disabled = on; $(dot).classList.toggle("busy", on); };
+
+  const ipToInt = ip => ip.split(".").reduce((a, o) => ((a * 256) + (+o)) >>> 0, 0) >>> 0;
+  const intToIp = n => [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255].join(".");
+  function isPrivateV4(ip) {
+    if (!/^\d+\.\d+\.\d+\.\d+$/.test(ip)) return false;
+    const [a, b] = ip.split(".").map(Number);
+    return a === 10 || a === 127 || a === 0 ||
+      (a === 192 && b === 168) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 169 && b === 254) ||
+      (a === 100 && b >= 64 && b <= 127);
+  }
+
+  function expandRange(spec) {
+    spec = spec.trim();
+    let m = spec.match(/^(\d+\.\d+\.\d+\.\d+)\/(\d+)$/);
+    if (m) {
+      const bits = +m[2];
+      if (bits < 28 || bits > 32) throw new Error("use a /28 to /32 (16 addresses max)");
+      const count = 1 << (32 - bits);
+      const net = (ipToInt(m[1]) & (0xffffffff << (32 - bits))) >>> 0;
+      return Array.from({ length: count }, (_, i) => intToIp((net + i) >>> 0));
+    }
+    m = spec.match(/^(\d+\.\d+\.\d+\.\d+)\s*-\s*(\d+\.\d+\.\d+\.\d+|\d+)$/);
+    if (m) {
+      const a = ipToInt(m[1]);
+      const b = m[2].includes(".") ? ipToInt(m[2]) : ((a & 0xffffff00) >>> 0) + (+m[2]);
+      if (b < a) throw new Error("range end is before the start");
+      if (b - a > 15) throw new Error("range is 16 addresses max");
+      const out = [];
+      for (let i = a; i <= b; i++) out.push(intToIp(i >>> 0));
+      return out;
+    }
+    throw new Error("expected a CIDR (a.b.c.d/29) or a range (a.b.c.d-e)");
+  }
+
+  const sanList = alt => !alt ? [] :
+    String(alt).split(/,\s*/).map(s => s.replace(/^(DNS|IP Address):/i, "").trim()).filter(Boolean);
+
+  function expiry(iso) {
+    if (!iso) return { txt: "—", cls: "" };
+    const days = Math.round((new Date(iso) - Date.now()) / 86400000);
+    return {
+      txt: String(iso).slice(0, 10) + "  ·  " + (days < 0 ? "expired" : days + " d left"),
+      cls: days < 0 ? "err" : days < 30 ? "warn" : "",
+    };
+  }
+
+  function webState(res, err) {
+    if (err) return { label: "error", cls: "err" };
+    const r = res || {};
+    if (r.statusCode) return { label: "HTTP " + r.statusCode, cls: "ok" };
+    if (r.tls) return { label: "TLS only", cls: "warn" };
+    return { label: "no reply", cls: "err" };
+  }
+
+  function svcBlock(port, res, err) {
+    const st = webState(res, err);
+    const t = res && res.tls;
+    let h = '<div class="svc"><div class="svc-h"><b>:' + port + "</b>" +
+      '<span class="badge ' + st.cls + '">' + esc(st.label) + "</span>";
+    if (t) h += "<span>" + esc(t.protocol || "") + "</span>" +
+      '<span class="badge ' + (t.authorized ? "ok" : "warn") + '">' +
+      (t.authorized ? "trusted" : "self-signed / name mismatch") + "</span>";
+    h += "</div>";
+
+    if (err) return h + '<table class="kv"><tr><td>error</td><td>' + esc(err) + "</td></tr></table></div>";
+
+    const rows = [];
+    const hdr = (res && res.headers) || {};
+    if (t) {
+      const sans = sanList(t.subject && t.subject.alt);
+      const ex = expiry(t.expiresAt);
+      rows.push(["subject", (t.subject && t.subject.CN) || "—"]);
+      if (sans.length) rows.push(["SAN (" + sans.length + ")", sans.join(", ")]);
+      rows.push(["issuer", [t.issuer && t.issuer.O, t.issuer && t.issuer.CN].filter(Boolean).join(" — ") || "—"]);
+      rows.push(["valid", String(t.createdAt).slice(0, 10) + "  to  " + String(t.expiresAt).slice(0, 10)]);
+      rows.push(["expires", '<span class="' + ex.cls + '">' + esc(ex.txt) + "</span>", 1]);
+      rows.push(["key", (t.keyType || "?") + " " + (t.keyBits || "?") + "-bit"]);
+      rows.push(["cipher", t.cipherName || "—"]);
+      rows.push(["serial", t.serialNumber || "—"]);
+      rows.push(["SHA-256", t.fingerprint256 || "—"]);
+    } else if (res) {
+      rows.push(["note", (res.rawOutput || "").split("\n")[0] || "connected, no certificate on this port"]);
+    }
+    if (hdr.server) rows.push(["server", hdr.server]);
+    if (hdr.location) rows.push(["location", hdr.location]);
+    if (res && res._probe) rows.push(["probe", probeLabel(res._probe, "")]);
+
+    return h + '<table class="kv">' + rows.map(r =>
+      "<tr><td>" + esc(r[0]) + "</td><td>" + (r[2] ? r[1] : esc(r[1])) + "</td></tr>").join("") +
+      "</table></div>";
+  }
+
+  function renderWeb(target, proto, rows, partial) {
+    return '<div class="meta">' + esc(proto) + "  ·  " + esc(target) + "  ·  " +
+      rows.length + " port" + (rows.length === 1 ? "" : "s") + (partial ? " &hellip;" : "") + "</div>" +
+      rows.map(r => svcBlock(r.port, r.res, r.err)).join("");
+  }
+
+  async function webCheck() {
+    const target = cleanHost($("#web-target").value);
+    if (!target) return;
+    if (isPrivateV4(target)) {
+      webOut.innerHTML = '<div class="meta err">' + esc(target) +
+        " is a private address — the probe is on the public internet and can't reach it.</div>";
+      return;
+    }
+    const proto = $("#web-proto").value;
+    const ports = parsePorts($("#web-ports").value, [443]);
+    const magic = $("#web-from").value.trim() || "US";
+    setBusy("#web-run", "#web-dot", true);
+    webOut.innerHTML = '<div class="meta">probing ' + esc(target) + " on " + ports.join(", ") + " &hellip;</div>";
+    const rows = [];
+    for (const port of ports) {
+      try {
+        const res = await globalping("http", target,
+          { protocol: proto, port, request: { method: "HEAD", path: "/" } }, magic);
+        rows.push({ port, res });
+      } catch (e) {
+        rows.push({ port, err: e.message });
+      }
+      webOut.innerHTML = renderWeb(target, proto, rows, rows.length < ports.length);
+    }
+    setBusy("#web-run", "#web-dot", false);
+  }
+
+  const sweepTable = found => !found.length ? "" :
+    '<table class="tbl"><thead><tr><th>address</th><th>tls ports</th><th>cert cn</th></tr></thead><tbody>' +
+    found.map(f => "<tr><td>" + esc(f.ip) + "</td><td>" + f.open.join(", ") + "</td><td>" +
+      esc(f.cn || "—") + "</td></tr>").join("") + "</tbody></table>";
+
+  async function webSweep() {
+    let ips;
+    try { ips = expandRange($("#web-range").value); }
+    catch (e) { webOut.innerHTML = '<div class="meta err">' + esc(e.message) + "</div>"; return; }
+
+    const priv = ips.filter(isPrivateV4);
+    if (priv.length) {
+      webOut.innerHTML = '<div class="meta err">' + esc(priv[0]) +
+        " is private — Globalping only reaches public addresses.</div>";
+      return;
+    }
+    const ports = parsePorts($("#web-range-ports").value, [443]).slice(0, 3);
+    const magic = $("#web-from").value.trim() || "US";
+    setBusy("#web-sweep-run", "#web-dot", true);
+
+    const found = [];
+    let aborted = "";
+    for (let i = 0; i < ips.length && !aborted; i++) {
+      const hit = { ip: ips[i], open: [], cn: "" };
+      for (const port of ports) {
+        try {
+          const res = await globalping("http", ips[i],
+            { protocol: "HTTPS", port, request: { method: "HEAD", path: "/" } }, magic);
+          if (res.statusCode || res.tls) {
+            hit.open.push(port);
+            if (!hit.cn && res.tls && res.tls.subject) hit.cn = res.tls.subject.CN || "";
+          }
+        } catch (e) {
+          if (/limit|429|too many|rate/i.test(e.message)) { aborted = e.message; break; }
+        }
+      }
+      if (hit.open.length) found.push(hit);
+      webOut.innerHTML = '<div class="meta">swept ' + (i + 1) + "/" + ips.length + "  ·  " +
+        found.length + " with a TLS server &hellip;</div>" + sweepTable(found);
+    }
+    webOut.innerHTML = (aborted
+      ? '<div class="meta err">stopped: ' + esc(aborted) + "</div>"
+      : '<div class="meta">' + ips.length + " addresses  ·  " + found.length +
+        " with a reachable TLS server</div>") + sweepTable(found);
+    setBusy("#web-sweep-run", "#web-dot", false);
+  }
+
+  $("#web-run").addEventListener("click", webCheck);
+  $("#web-target").addEventListener("keydown", e => { if (e.key === "Enter") webCheck(); });
+  $("#web-sweep-run").addEventListener("click", webSweep);
+  $("#web-sweep-toggle").addEventListener("click", () => {
+    const box = $("#web-sweep");
+    box.hidden = !box.hidden;
+    $("#web-sweep-toggle").setAttribute("aria-expanded", String(!box.hidden));
+    $("#web-sweep-toggle").innerHTML = box.hidden ? "Scan a range ▸" : "Hide range scan ▾";
+  });
 
   // ---- init ----
   selectTarget(TARGETS["aws-e"], "aws-e");
