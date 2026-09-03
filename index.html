@@ -56,6 +56,9 @@
   body.net-offline .needs-net .offline-note{display:block}
   body.net-offline .needs-net .row,
   body.net-offline .needs-net .providers{opacity:.4;pointer-events:none}
+  /* the cert-file parser is fully local, so keep it live when Globalping is down */
+  body.net-offline #web-modes,
+  body.net-offline #web-file-pane .row{opacity:1;pointer-events:auto}
 
   .grid{
     display:grid;gap:16px;align-items:start;
@@ -100,6 +103,12 @@
   input.host{width:100%;min-width:0}
   input.hops{width:74px}
   input.from{width:150px}
+  input[type=file]{font:inherit;font-size:11px;color:var(--fg-dim);border:0;padding:0}
+  textarea{font:inherit;font-size:12px;background:var(--field);color:var(--fg);border:1px solid var(--border);
+           border-radius:7px;padding:7px 9px;width:100%;resize:vertical;line-height:1.4}
+  textarea:focus{outline:none;border-color:var(--magenta)}
+  #web-file-pane.drag{outline:1px dashed var(--cyan);outline-offset:5px;border-radius:8px}
+  #web-modes .btn.on{background:rgba(125,207,255,.14);border-color:var(--cyan);color:var(--cyan)}
 
   .stats{margin-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:8px}
   .stat{background:var(--field);border:1px solid var(--border);border-radius:8px;padding:8px 10px;min-width:0}
@@ -153,8 +162,9 @@
      round-trip (not ICMP), once every 500&nbsp;ms. <b>Traceroute</b>, <b>DNS</b>, and the
      <b>web&nbsp;/&nbsp;TLS probe</b> can't run in a browser directly, so they execute on a
      <a href="https://globalping.io">Globalping</a> probe &mdash; which is also what lets DNS query
-     any resolver, and what makes reading a certificate possible at all. Ping and traceroute
-     results export to CSV.</p>
+     any resolver, and what fetches a live host's certificate. The <b>web&nbsp;/&nbsp;TLS</b> card
+     also parses a cert file you already have, entirely in the page. Ping and traceroute results
+     export to CSV.</p>
   <div id="netbar" class="netbar checking">
     <span class="nb-dot"></span>
     <span id="nb-text">checking Globalping connectivity&hellip;</span>
@@ -300,46 +310,71 @@
   <!-- ==================== WEB / TLS ==================== -->
   <section class="card needs-net" id="web">
     <h2>Web &amp; TLS probe <span class="dot" id="web-dot"></span></h2>
-    <div class="offline-note">Runs on a Globalping probe, which is unreachable right now. Ping still works offline.</div>
-    <div class="sub">A HEAD request from a Globalping probe, one per port &mdash; reports the HTTP
-      status and the served certificate. Public hosts only: Globalping refuses private / RFC1918
-      addresses, and a browser can't read certificates at all.</div>
+    <div class="offline-note">Fetching from a host needs a Globalping probe (unreachable now) &mdash;
+      but <b>Load a cert file</b> is parsed entirely in your browser and still works offline.</div>
 
-    <div class="row">
-      <label class="fld grow">host / public ip
-        <input class="host" id="web-target" type="text" placeholder="e.g. example.com" spellcheck="false" autocomplete="off">
-      </label>
-      <label class="fld">scheme
-        <select id="web-proto">
-          <option>HTTPS</option><option>HTTP</option><option value="HTTP2">HTTP/2</option>
-        </select>
-      </label>
-    </div>
-    <div class="row">
-      <label class="fld grow">ports
-        <input class="host" id="web-ports" type="text" value="443, 8443, 8006, 5001, 10000" spellcheck="false" autocomplete="off">
-      </label>
-      <label class="fld">probe
-        <input class="from" id="web-from" type="text" value="US" spellcheck="false" autocomplete="off">
-      </label>
-    </div>
-    <div class="row">
-      <button class="btn go" id="web-run">Check</button>
-      <button class="btn" id="web-sweep-toggle" aria-expanded="false">Scan a range &#9656;</button>
+    <div class="row" id="web-modes">
+      <button class="btn on" data-mode="fetch">Fetch from host</button>
+      <button class="btn" data-mode="file">Load a cert file</button>
     </div>
 
-    <div id="web-sweep" hidden>
-      <div class="sub" style="margin-top:2px">Sweeps up to 16 addresses (a <code>/28</code>&ndash;<code>/32</code>
-        CIDR, or <code>a.b.c.d-e</code>) for a reachable TLS server. Public ranges only, and every
-        address spends probe quota (~250&nbsp;runs/hour) &mdash; keep it small.</div>
+    <div id="web-fetch-pane">
+      <div class="sub">A HEAD request from a Globalping probe, one per port &mdash; reports the HTTP
+        status and the served certificate. Public hosts only: Globalping refuses private / RFC1918
+        addresses, and page JavaScript can't read a live connection's certificate.</div>
+
       <div class="row">
-        <label class="fld grow">cidr / range
-          <input class="host" id="web-range" type="text" placeholder="203.0.113.0/29   or   203.0.113.1-14" spellcheck="false" autocomplete="off">
+        <label class="fld grow">host / public ip
+          <input class="host" id="web-target" type="text" placeholder="e.g. example.com" spellcheck="false" autocomplete="off">
         </label>
-        <label class="fld">ports
-          <input class="from" id="web-range-ports" type="text" value="443, 8443" spellcheck="false" autocomplete="off">
+        <label class="fld">scheme
+          <select id="web-proto">
+            <option>HTTPS</option><option>HTTP</option><option value="HTTP2">HTTP/2</option>
+          </select>
         </label>
-        <button class="btn go" id="web-sweep-run">Sweep</button>
+      </div>
+      <div class="row">
+        <label class="fld grow">ports
+          <input class="host" id="web-ports" type="text" value="443, 8443, 8006, 5001, 10000" spellcheck="false" autocomplete="off">
+        </label>
+        <label class="fld">probe
+          <input class="from" id="web-from" type="text" value="US" spellcheck="false" autocomplete="off">
+        </label>
+      </div>
+      <div class="row">
+        <button class="btn go" id="web-run">Check</button>
+        <button class="btn" id="web-sweep-toggle" aria-expanded="false">Scan a range &#9656;</button>
+      </div>
+
+      <div id="web-sweep" hidden>
+        <div class="sub" style="margin-top:2px">Sweeps up to 16 addresses (a <code>/28</code>&ndash;<code>/32</code>
+          CIDR, or <code>a.b.c.d-e</code>) for a reachable TLS server. Public ranges only, and every
+          address spends probe quota (~250&nbsp;runs/hour) &mdash; keep it small.</div>
+        <div class="row">
+          <label class="fld grow">cidr / range
+            <input class="host" id="web-range" type="text" placeholder="203.0.113.0/29   or   203.0.113.1-14" spellcheck="false" autocomplete="off">
+          </label>
+          <label class="fld">ports
+            <input class="from" id="web-range-ports" type="text" value="443, 8443" spellcheck="false" autocomplete="off">
+          </label>
+          <button class="btn go" id="web-sweep-run">Sweep</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="web-file-pane" hidden>
+      <div class="sub">Decoded with an X.509 parser in the page &mdash; nothing is uploaded, no chain
+        building, no trust-store or expiry check. Takes PEM or DER (<code>.pem .crt .cer .der</code>);
+        a bundle / <code>fullchain</code> shows every certificate in it.</div>
+      <div class="row">
+        <input type="file" id="cert-file" accept=".pem,.crt,.cer,.der,.txt,application/x-x509-ca-cert,application/pkix-cert,application/x-pem-file">
+      </div>
+      <div class="row">
+        <textarea id="cert-paste" rows="4" spellcheck="false" placeholder="&hellip;or paste one or more -----BEGIN CERTIFICATE----- blocks"></textarea>
+      </div>
+      <div class="row">
+        <button class="btn go" id="cert-parse">Parse</button>
+        <button class="btn" id="cert-clear">Clear</button>
       </div>
     </div>
 
@@ -1047,6 +1082,275 @@
     $("#web-sweep-toggle").setAttribute("aria-expanded", String(!box.hidden));
     $("#web-sweep-toggle").innerHTML = box.hidden ? "Scan a range ▸" : "Hide range scan ▾";
   });
+
+  // ---- mode switch: fetch-from-host  <->  load-a-file ----
+  [...document.querySelectorAll("#web-modes .btn")].forEach(btn => {
+    btn.addEventListener("click", () => {
+      const file = btn.dataset.mode === "file";
+      document.querySelectorAll("#web-modes .btn").forEach(x => x.classList.toggle("on", x === btn));
+      $("#web-fetch-pane").hidden = file;
+      $("#web-file-pane").hidden = !file;
+      webOut.innerHTML = '<div class="meta">' + (file ? "choose a file or paste a PEM." : "no probe yet.") + "</div>";
+    });
+  });
+
+  // =====================================================================
+  //  LOCAL X.509 VIEWER  -- parse a cert file/paste in the page, no network
+  // =====================================================================
+  const B = { hex: (a, s = ":") => Array.from(a, x => x.toString(16).padStart(2, "0")).join(s) };
+
+  function tlv(b, p) {
+    const tag = b[p];
+    let len = b[p + 1], hl = 2;
+    if (len & 0x80) {
+      const n = len & 0x7f;
+      len = 0;
+      for (let i = 0; i < n; i++) len = len * 256 + b[p + 2 + i];
+      hl = 2 + n;
+    }
+    return { tag, cls: tag >> 6, tagnum: tag & 0x1f, start: p, vs: p + hl, ve: p + hl + len, len, end: p + hl + len };
+  }
+  function* kids(b, node) {
+    let p = node.vs;
+    while (p < node.ve) { const t = tlv(b, p); yield t; p = t.end; }
+  }
+  const kidlist = (b, node) => [...kids(b, node)];
+
+  function oid(b, node) {
+    const v = b.subarray(node.vs, node.ve), out = [];
+    let val = 0, first = true;
+    for (let i = 0; i < v.length; i++) {
+      val = val * 128 + (v[i] & 0x7f);
+      if (!(v[i] & 0x80)) {
+        if (first) { out.push(Math.floor(val / 40), val % 40); first = false; }
+        else out.push(val);
+        val = 0;
+      }
+    }
+    return out.join(".");
+  }
+  function str(b, node) {
+    const v = b.subarray(node.vs, node.ve);
+    if (node.tag === 0x1e) { let s = ""; for (let i = 0; i < v.length; i += 2) s += String.fromCharCode((v[i] << 8) | v[i + 1]); return s; }
+    return new TextDecoder().decode(v);
+  }
+  function x509time(b, node) {
+    const s = new TextDecoder().decode(b.subarray(node.vs, node.ve));
+    let y, rest;
+    if (node.tag === 0x17) { y = +s.slice(0, 2); y += y < 50 ? 2000 : 1900; rest = s.slice(2); }
+    else { y = +s.slice(0, 4); rest = s.slice(4); }
+    const n = (a, c) => +rest.slice(a, c);
+    return new Date(Date.UTC(y, n(0, 2) - 1, n(2, 4), n(4, 6), n(6, 8), n(8, 10) || 0));
+  }
+
+  const DN_OID = { "2.5.4.3": "CN", "2.5.4.6": "C", "2.5.4.7": "L", "2.5.4.8": "ST", "2.5.4.10": "O",
+    "2.5.4.11": "OU", "2.5.4.5": "serialNumber", "2.5.4.4": "SN", "2.5.4.42": "GN",
+    "1.2.840.113549.1.9.1": "emailAddress", "0.9.2342.19200300.100.1.25": "DC" };
+  function parseDN(b, node) {
+    const parts = [];
+    for (const rdn of kids(b, node)) for (const atv of kids(b, rdn)) {
+      const k = kidlist(b, atv);
+      parts.push((DN_OID[oid(b, k[0])] || oid(b, k[0])) + "=" + str(b, k[1]));
+    }
+    return parts.join(", ");
+  }
+  function parseSAN(b, seq) {
+    const out = [];
+    for (const gn of kids(b, seq)) {
+      const v = b.subarray(gn.vs, gn.ve);
+      if (gn.tagnum === 2) out.push("DNS:" + new TextDecoder().decode(v));
+      else if (gn.tagnum === 1) out.push("email:" + new TextDecoder().decode(v));
+      else if (gn.tagnum === 6) out.push("URI:" + new TextDecoder().decode(v));
+      else if (gn.tagnum === 7) out.push("IP:" + (v.length === 4 ? Array.from(v).join(".")
+        : Array.from({ length: 8 }, (_, i) => ((v[i * 2] << 8) | v[i * 2 + 1]).toString(16)).join(":")));
+      else out.push("otherName");
+    }
+    return out;
+  }
+
+  const SIG_OID = { "1.2.840.113549.1.1.5": "sha1WithRSA", "1.2.840.113549.1.1.11": "sha256WithRSA",
+    "1.2.840.113549.1.1.12": "sha384WithRSA", "1.2.840.113549.1.1.13": "sha512WithRSA",
+    "1.2.840.113549.1.1.10": "RSASSA-PSS", "1.2.840.10045.4.3.2": "ecdsa-with-SHA256",
+    "1.2.840.10045.4.3.3": "ecdsa-with-SHA384", "1.2.840.10045.4.3.4": "ecdsa-with-SHA512",
+    "1.3.101.112": "Ed25519", "1.3.101.113": "Ed448" };
+  const CURVE_OID = { "1.2.840.10045.3.1.7": ["P-256", 256], "1.3.132.0.34": ["P-384", 384], "1.3.132.0.35": ["P-521", 521] };
+  function keyInfo(b, spki) {
+    const [alg, bits] = kidlist(b, spki);
+    const ak = kidlist(b, alg);
+    const o = oid(b, ak[0]);
+    if (o === "1.2.840.113549.1.1.1") {
+      const seq = tlv(b, bits.vs + 1);
+      const mod = kidlist(b, seq)[0];
+      let n = mod.len - (b[mod.vs] === 0 ? 1 : 0);
+      return { type: "RSA", bits: n * 8 };
+    }
+    if (o === "1.2.840.10045.2.1") {
+      const c = ak[1] ? CURVE_OID[oid(b, ak[1])] : null;
+      return { type: "EC", curve: c ? c[0] : "unknown", bits: c ? c[1] : null };
+    }
+    if (o === "1.3.101.112") return { type: "Ed25519", bits: 256 };
+    if (o === "1.3.101.113") return { type: "Ed448", bits: 456 };
+    return { type: o, bits: null };
+  }
+
+  const KU_BITS = ["digitalSignature", "nonRepudiation", "keyEncipherment", "dataEncipherment",
+    "keyAgreement", "keyCertSign", "cRLSign", "encipherOnly", "decipherOnly"];
+  const EKU_OID = { "1.3.6.1.5.5.7.3.1": "serverAuth", "1.3.6.1.5.5.7.3.2": "clientAuth",
+    "1.3.6.1.5.5.7.3.3": "codeSigning", "1.3.6.1.5.5.7.3.4": "emailProtection",
+    "1.3.6.1.5.5.7.3.8": "timeStamping", "1.3.6.1.5.5.7.3.9": "OCSPSigning" };
+
+  async function digest(algo, bytes) {
+    return B.hex(new Uint8Array(await crypto.subtle.digest(algo, bytes)));
+  }
+
+  async function parseCert(der) {
+    const b = der;
+    if (b[0] !== 0x30) throw new Error("not a DER SEQUENCE — is this a certificate?");
+    const cert = tlv(b, 0);
+    const [tbs, sigAlg] = kidlist(b, cert);
+    const tk = kidlist(b, tbs);
+    let i = 0, version = 1;
+    if (tk[0].cls === 2 && tk[0].tagnum === 0) { version = b[tlv(b, tk[0].vs).vs] + 1; i = 1; }
+    const serialN = tk[i++];
+    i++; // signature alg inside tbs (skip, use outer)
+    const issuerN = tk[i++];
+    const [nb, na] = kidlist(b, tk[i++]);
+    const subjectN = tk[i++];
+    const spkiN = tk[i++];
+
+    const ext = { sans: [], ku: [], eku: [], ca: null, ski: "", aki: "" };
+    const extC = tk.find(k => k.cls === 2 && k.tagnum === 3);
+    if (extC) for (const e of kids(b, tlv(b, extC.vs))) {
+      const ek = kidlist(b, e);
+      const eo = oid(b, ek[0]);
+      const inner = tlv(b, ek[ek.length - 1].vs);
+      if (eo === "2.5.29.17") ext.sans = parseSAN(b, inner);
+      else if (eo === "2.5.29.19") { const bn = kidlist(b, inner).find(k => k.tag === 0x01); ext.ca = bn ? b[bn.vs] !== 0 : false; }
+      else if (eo === "2.5.29.15") {
+        const bytes = b.subarray(inner.vs + 1, inner.ve);
+        KU_BITS.forEach((nm, ix) => { if ((bytes[ix >> 3] >> (7 - (ix & 7))) & 1) ext.ku.push(nm); });
+      }
+      else if (eo === "2.5.29.37") for (const o of kids(b, inner)) ext.eku.push(EKU_OID[oid(b, o)] || oid(b, o));
+      else if (eo === "2.5.29.14") ext.ski = B.hex(b.subarray(inner.vs, inner.ve));
+      else if (eo === "2.5.29.35") for (const k of kids(b, inner)) if (k.cls === 2 && k.tagnum === 0) ext.aki = B.hex(b.subarray(k.vs, k.ve));
+    }
+
+    return {
+      version,
+      serial: B.hex(b.subarray(serialN.vs, serialN.ve)),
+      issuer: parseDN(b, issuerN),
+      subject: parseDN(b, subjectN),
+      notBefore: x509time(b, nb),
+      notAfter: x509time(b, na),
+      key: keyInfo(b, spkiN),
+      sigAlg: SIG_OID[oid(b, kidlist(b, sigAlg)[0])] || oid(b, kidlist(b, sigAlg)[0]),
+      ext,
+      sha256: await digest("SHA-256", b),
+      sha1: await digest("SHA-1", b),
+      spkiPin: btoa(String.fromCharCode(...new Uint8Array(
+        await crypto.subtle.digest("SHA-256", b.subarray(spkiN.start, spkiN.end))))),
+    };
+  }
+
+  function pemToDer(text) {
+    const m = text.match(/-----BEGIN [^-]*-----([\s\S]*?)-----END [^-]*-----/);
+    const b64 = (m ? m[1] : text).replace(/[^A-Za-z0-9+/=]/g, "");
+    if (!b64) throw new Error("no PEM or base64 content found");
+    const bin = atob(b64), out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+  function toDerList(src) {
+    let text = null;
+    if (src instanceof Uint8Array) {
+      const asText = new TextDecoder("utf-8", { fatal: false }).decode(src);
+      if (src[0] === 0x30 && !asText.includes("-----BEGIN")) return [src];
+      text = asText;
+    } else {
+      text = src;
+    }
+    const blocks = text.match(/-----BEGIN [^-]*CERTIFICATE-----[\s\S]*?-----END [^-]*CERTIFICATE-----/g);
+    return (blocks || [text]).map(pemToDer);
+  }
+
+  function certBlock(c, idx, total) {
+    const now = Date.now();
+    const state = c.notAfter.getTime() < now ? { t: "expired", cls: "err" }
+      : c.notBefore.getTime() > now ? { t: "not yet valid", cls: "warn" }
+      : { t: "in validity window", cls: "ok" };
+    const ex = expiry(c.notAfter.toISOString());
+    const iso = d => d.toISOString().replace("T", " ").replace(".000Z", " UTC");
+    let h = '<div class="svc"><div class="svc-h"><b>' +
+      (total > 1 ? "Cert " + (idx + 1) + " / " + total : "Certificate") + "</b>" +
+      '<span class="badge">v' + c.version + "</span>" +
+      '<span class="badge ' + state.cls + '">' + state.t + "</span>" +
+      "<span>" + esc(c.key.type + (c.key.bits ? " " + c.key.bits : "")) + "</span>" +
+      (c.ext.ca ? '<span class="badge warn">CA</span>' : "") + "</div>";
+    const rows = [
+      ["subject", c.subject || "—"],
+      c.ext.sans.length && ["SAN (" + c.ext.sans.length + ")", c.ext.sans.join(", ")],
+      ["issuer", c.issuer || "—"],
+      ["serial", c.serial],
+      ["not before", iso(c.notBefore)],
+      ["not after", iso(c.notAfter)],
+      ["expires", '<span class="' + ex.cls + '">' + esc(ex.txt) + "</span>", 1],
+      ["public key", c.key.type + (c.key.curve ? " " + c.key.curve : "") + (c.key.bits ? "  ·  " + c.key.bits + "-bit" : "")],
+      ["signature", c.sigAlg],
+      c.ext.ku.length && ["key usage", c.ext.ku.join(", ")],
+      c.ext.eku.length && ["ext key usage", c.ext.eku.join(", ")],
+      c.ext.ca !== null && ["basic constraints", "CA:" + (c.ext.ca ? "TRUE" : "FALSE")],
+      c.ext.ski && ["subject key id", c.ext.ski],
+      c.ext.aki && ["authority key id", c.ext.aki],
+      ["SHA-256", c.sha256],
+      ["SHA-1", c.sha1],
+      ["SPKI pin", "sha256/" + c.spkiPin],
+    ].filter(Boolean);
+    return h + '<table class="kv">' + rows.map(r =>
+      "<tr><td>" + esc(r[0]) + "</td><td>" + (r[2] ? r[1] : esc(r[1])) + "</td></tr>").join("") + "</table></div>";
+  }
+
+  async function parseCertInput() {
+    if (!(window.crypto && crypto.subtle)) {
+      webOut.innerHTML = '<div class="meta err">WebCrypto isn\'t available in this context.</div>';
+      return;
+    }
+    const f = $("#cert-file").files && $("#cert-file").files[0];
+    const pasted = $("#cert-paste").value.trim();
+    if (!f && !pasted) { webOut.innerHTML = '<div class="meta">choose a file or paste a PEM.</div>'; return; }
+    webOut.innerHTML = '<div class="meta">parsing locally &hellip;</div>';
+    try {
+      const src = f ? new Uint8Array(await f.arrayBuffer()) : pasted;
+      const ders = toDerList(src);
+      const certs = [];
+      for (const d of ders) certs.push(await parseCert(d));
+      webOut.innerHTML = '<div class="meta">parsed in the browser  ·  ' + certs.length + " cert" +
+        (certs.length === 1 ? "" : "s") + "  ·  no validation performed</div>" +
+        certs.map((c, i) => certBlock(c, i, certs.length)).join("");
+    } catch (e) {
+      webOut.innerHTML = '<div class="meta err">Parse error: ' + esc(e.message) + "</div>";
+    }
+  }
+
+  $("#cert-parse").addEventListener("click", parseCertInput);
+  $("#cert-clear").addEventListener("click", () => {
+    $("#cert-file").value = "";
+    $("#cert-paste").value = "";
+    webOut.innerHTML = '<div class="meta">choose a file or paste a PEM.</div>';
+  });
+  $("#cert-file").addEventListener("change", parseCertInput);
+  (() => {
+    const fp = $("#web-file-pane");
+    fp.addEventListener("dragover", e => { e.preventDefault(); fp.classList.add("drag"); });
+    fp.addEventListener("dragleave", e => { if (e.target === fp) fp.classList.remove("drag"); });
+    fp.addEventListener("drop", e => {
+      e.preventDefault();
+      fp.classList.remove("drag");
+      if (e.dataTransfer.files && e.dataTransfer.files.length) {
+        $("#cert-file").files = e.dataTransfer.files;
+        parseCertInput();
+      }
+    });
+  })();
 
   // =====================================================================
   //  GLOBALPING CONNECTIVITY  -- checked on load + every 5 min

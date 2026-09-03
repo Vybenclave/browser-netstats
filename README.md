@@ -89,6 +89,10 @@ answer table (`name / type / ttl / data`).
 
 ## Web & TLS probe
 
+Two modes, switched with the buttons at the top of the card.
+
+### Fetch from host
+
 Sends a `HEAD` from a Globalping probe to `host:port` for each port you list,
 and reports the HTTP status plus the **served certificate**: subject CN, SANs,
 issuer, validity window and days remaining (amber under 30 days, red once
@@ -106,13 +110,30 @@ and **HTTP/2**.
 range - 16 addresses max - for a reachable TLS server and lists the ones that
 answer.
 
-### What it can't do
+### Load a cert file
 
-- **Private / LAN targets** (your actual router at `192.168.1.1`, a NAS on
-  `10.x`) - Globalping runs on the public internet and rejects RFC1918
-  addresses outright. A browser can't help either: it has no API for the peer
-  certificate, Private Network Access blocks page-to-LAN requests, and a
-  self-signed cert turns every probe into an indistinguishable failure.
+Pick or drag in a `.pem` / `.crt` / `.cer` / `.der`, or paste one or more
+`-----BEGIN CERTIFICATE-----` blocks. An X.509 parser in the page (~180 lines,
+no dependency) decodes it and shows version, subject and issuer DN, serial,
+`not before` / `not after` and days remaining, SANs, public key
+(RSA/EC/Ed25519 + bits), signature algorithm, basic constraints, key usage and
+extended key usage, subject/authority key IDs, the SHA-1 and SHA-256
+fingerprints, and the SPKI pin (`sha256/<base64>`, HPKP-style). A bundle or
+`fullchain` renders every certificate in it.
+
+Nothing is uploaded and nothing is checked - no chain building, no trust
+store, no expiry enforcement, no hostname match. It works offline (it's the
+one part of this card that does), so it's the way to inspect a certificate you
+exported from a LAN device. Fingerprint and SPKI pin were verified byte-for-byte
+against `openssl`.
+
+### What neither mode can do
+
+- **Read a live LAN device's certificate.** Page JavaScript has no API for a
+  connection's certificate, `fetch` to a private IP is blocked by Private
+  Network Access, and Globalping rejects RFC1918 addresses. Export the cert
+  from the device (`openssl s_client -connect host:443 | openssl x509`, or the
+  device's own UI) and use **Load a cert file**.
 - **Non-web services** - SSH, SMTP, IMAP, RDP, SMB, VNC, database ports, SNMP,
   etc. Neither a browser (the Fetch "bad ports" blocklist, no raw sockets) nor
   Globalping (only ping / traceroute / mtr / dns / http measurements) can open
