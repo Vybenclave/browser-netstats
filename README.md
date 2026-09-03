@@ -4,7 +4,7 @@ A single-page, no-build kit of network tools that run in the browser. Download t
 
 **Live page:** https://vybenclave.github.io/browser-netstats/
 
-Nine tools in a card grid — one column on mobile, two centered columns on a wide
+Nine tools in a card grid. One column on mobile, two centered columns on a wide
 screen; each column is an independent vertical stack, so expanding one card only
 pushes the cards under it.
 
