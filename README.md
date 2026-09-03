@@ -5,18 +5,20 @@ Tokyo Night theme, cyan/magenta ping graph on a 25% grey grid.
 
 **Live page:** https://vybenclave.github.io/browser-netstats/
 
-Nine tools in a card grid — single column on mobile, two centered columns on a
-wide screen:
+Nine tools in a card grid — one column on mobile, two centered columns on a wide
+screen; each column is an independent vertical stack, so expanding one card only
+pushes the cards under it. A collapsed **description** disclosure in the header
+one-lines every tool.
 
 | Tool | Where it runs |
 | ---- | ------------- |
-| **Ping** | timed in your browser (HTTPS round-trip) |
-| **Latency matrix** | in your browser, to ~10 public anycast endpoints |
-| **Connection** | direct fetches to Cloudflare edge |
-| **Bandwidth** | direct up/down streams to Cloudflare edge |
+| **Connection** | direct fetches to the Cloudflare edge |
 | **NAT type** | WebRTC + public STUN, in your browser |
-| **Traceroute** | on a [Globalping](https://globalping.io) probe |
-| **DNS lookup** | on a Globalping probe (pick the resolver) |
+| **Bandwidth** | streamed up/down to the Cloudflare edge |
+| **Latency matrix** | in your browser, to ~10 public anycast endpoints |
+| **Ping** | timed in your browser (HTTPS round-trip) |
+| **DNS lookup** | on a [Globalping](https://globalping.io) probe (pick the resolver) |
+| **Traceroute** | on a Globalping probe |
 | **Web probe** | on a Globalping probe |
 | **TLS certificate** | local file (default) or a Globalping probe |
 
@@ -52,8 +54,8 @@ These run entirely from the browser:
   samples past a 3 s warm-up). **btop-style bar trace**: each 250 ms sample is a
   column - download grows up from the centre line (cyan), upload grows down
   (magenta), with a faint latency line on a right-hand ms axis. **Bufferbloat**
-  grade = loaded median RTT − idle median. Fast links stop at ~800 MB down /
-  250 MB up. Every run is appended to a **log** in `localStorage` - last 8 in a
+  grade = loaded median RTT − idle median. Fast links stop at ~1.6 GB down /
+  500 MB up. Every run is appended to a **log** in `localStorage` - last 8 in a
   table, **Share log** exports CSV (`iso_time, down_mbps, up_mbps,
   latency_idle_ms, latency_loaded_ms, bufferbloat_ms, jitter_ms, cf_edge`),
   **Clear log** wipes it.

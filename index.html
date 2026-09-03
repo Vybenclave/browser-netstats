@@ -42,7 +42,15 @@
   h1{margin:0;font-size:20px;letter-spacing:.5px}
   h1 .a{color:var(--cyan)}
   h1 .b{color:var(--magenta)}
-  header p{margin:6px 0 0;font-size:13px;line-height:1.55;color:var(--muted);max-width:88ch}
+  header p.lede{margin:6px 0 0;font-size:13px;line-height:1.55;color:var(--muted);max-width:88ch}
+  details.desc{margin-top:8px;max-width:92ch}
+  details.desc summary{font-size:12px;color:var(--dim);cursor:pointer;width:max-content;list-style:none}
+  details.desc summary::-webkit-details-marker{display:none}
+  details.desc summary::before{content:"\25B8  ";color:var(--muted)}
+  details.desc[open] summary::before{content:"\25BE  "}
+  details.desc dl{margin:8px 0 0;font-size:12px;line-height:1.5}
+  details.desc dt{color:var(--fg-dim);margin-top:6px}
+  details.desc dd{margin:1px 0 0;color:var(--muted)}
   .netbar{margin-top:12px;display:inline-flex;align-items:center;gap:8px;font-size:12px;
           border:1px solid var(--border);border-radius:8px;padding:5px 11px;color:var(--dim);max-width:92ch}
   .netbar .nb-dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex:none}
@@ -59,13 +67,14 @@
   body.net-offline .needs-net .providers{opacity:.4;pointer-events:none}
 
   .grid{
-    display:grid;gap:18px;align-items:start;
-    grid-template-columns:1fr;
+    display:flex;flex-direction:column;gap:18px;
     max-width:520px;margin:0 auto;
     padding:16px 20px 34px;
   }
+  .col{display:flex;flex-direction:column;gap:18px;min-width:0}
   @media (min-width:1000px){
-    .grid{grid-template-columns:repeat(2,minmax(0,480px));max-width:1000px}
+    .grid{flex-direction:row;align-items:flex-start;max-width:1000px}
+    .col{flex:1}
   }
 
   .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px}
@@ -171,13 +180,23 @@
 <body>
 <header>
   <h1>Browser <span class="a">Network</span> <span class="b">Toolkit</span></h1>
-  <p>A few network tools that run in the page. <b>Ping</b> is timed from your browser as an HTTPS
-     round-trip (not ICMP), once every 500&nbsp;ms. <b>Traceroute</b>, <b>DNS</b>, and the
-     <b>web&nbsp;/&nbsp;TLS probe</b> can't run in a browser directly, so they execute on a
-     <a href="https://globalping.io">Globalping</a> probe &mdash; which is also what lets DNS query
-     any resolver and fetches a live host's certificate. The <b>TLS certificate</b> card also parses
-     a cert file you already have, entirely in the page and offline. Ping and traceroute results
-     export to CSV.</p>
+  <p class="lede">Network checks that run in the page. Traceroute, DNS, web probe and live cert
+     fetch run on a <a href="https://globalping.io">Globalping</a> probe (a browser can't); the
+     rest are measured from here.</p>
+  <details class="desc">
+    <summary>description</summary>
+    <dl>
+      <dt>Connection</dt><dd>Public IP, ASN, the Cloudflare edge you land on, IPv6 reachability, HTTP/TLS version, clock offset &mdash; read straight from here.</dd>
+      <dt>NAT type</dt><dd>Public IP, whether outbound UDP works, and cone vs symmetric NAT, via WebRTC + public STUN.</dd>
+      <dt>Bandwidth</dt><dd>Sustained down/up to Cloudflare (~20&nbsp;s / ~12&nbsp;s) with a btop-style bar trace, bufferbloat grade, and a per-run log.</dd>
+      <dt>Latency matrix</dt><dd>HTTPS round-trip from here to ~10 public anycast endpoints (Cloudflare, Google, AWS, &hellip;), ranked fastest first.</dd>
+      <dt>Ping</dt><dd>HTTPS round-trip to a chosen host every 500&nbsp;ms, with a rolling graph, jitter and packet-loss.</dd>
+      <dt>DNS lookup</dt><dd>Any record type (incl. SPF / DMARC / reverse) from a resolver you pick &mdash; Cloudflare, Google, Comcast or custom &mdash; on a Globalping probe.</dd>
+      <dt>Traceroute</dt><dd>Hop-by-hop path to a target from a Globalping probe; ICMP / TCP / UDP, pick the probe location.</dd>
+      <dt>Web probe</dt><dd>HTTP status + Server/redirect headers per port, or a live/offline sweep of a small IP range, via Globalping.</dd>
+      <dt>TLS certificate</dt><dd>Decode a cert file in the page (no validation, works offline), or fetch a live host's cert via a Globalping probe.</dd>
+    </dl>
+  </details>
   <div id="netbar" class="netbar checking">
     <span class="nb-dot"></span>
     <span id="nb-text">checking Globalping connectivity&hellip;</span>
@@ -185,7 +204,61 @@
 </header>
 
 <div class="grid">
+  <div class="col">
+  <!-- ==================== CONNECTION ==================== -->
+  <section class="card" id="conn">
+    <h2>Connection <span class="dot" id="conn-dot"></span></h2>
+    <div class="sub">What this device looks like from the internet &mdash; public IP, ASN, the
+      Cloudflare edge you land on, IPv6, HTTP version, and clock offset. Read straight from here.</div>
+    <div class="row"><button class="btn go" id="conn-run">Check</button></div>
+    <div class="shbar"><button class="btn" id="conn-share" disabled>Share result</button></div>
+    <div class="out" id="conn-out"><div class="meta">not checked yet.</div></div>
+  </section>
+  <!-- ==================== NAT TYPE ==================== -->
+  <section class="card" id="nat">
+    <h2>NAT type <span class="dot" id="nat-dot"></span></h2>
+    <div class="sub">WebRTC + public STUN: your public IP, whether outbound UDP works, and whether
+      your NAT is symmetric (bad for peer-to-peer, VoIP, hosting games). Local to the browser.</div>
+    <div class="row"><button class="btn go" id="nat-run">Check</button></div>
+    <div class="shbar"><button class="btn" id="nat-share" disabled>Share result</button></div>
+    <div class="out" id="nat-out"><div class="meta">not checked yet.</div></div>
+  </section>
+  <!-- ==================== BANDWIDTH ==================== -->
+  <section class="card" id="bw">
+    <h2>Bandwidth <span class="dot" id="bw-dot"></span></h2>
+    <div class="sub">Down/up throughput to the nearest Cloudflare edge, sustained ~20&nbsp;s down /
+      ~12&nbsp;s up so the number is representative, not a burst. Live btop-style bar trace (down
+      up from the centre, up down from it) with latency-under-load. Fast links stop at ~1.6&nbsp;GB
+      down / 500&nbsp;MB up &mdash; mind mobile data. Every run is logged.</div>
+    <div class="row">
+      <button class="btn go" id="bw-run">Run test</button>
+      <button class="btn" id="bw-clear">Clear log</button>
+    </div>
 
+    <div class="gbox">
+      <div class="cap">
+        <span id="bw-cap">idle</span>
+        <span class="legend">
+          <span><i style="background:#7dcfff"></i>down</span>
+          <span><i style="background:#ff6ad5"></i>up</span>
+          <span><i style="background:#828cb4"></i>latency</span>
+        </span>
+      </div>
+      <canvas id="bwc"></canvas>
+    </div>
+
+    <div class="shbar"><button class="btn" id="bw-share" disabled>Share log</button></div>
+    <div class="out" id="bw-out"><div class="meta">not run yet.</div></div>
+  </section>
+  <!-- ==================== LATENCY MATRIX ==================== -->
+  <section class="card" id="lat">
+    <h2>Latency matrix <span class="dot" id="lat-dot"></span></h2>
+    <div class="sub">HTTPS round-trip from here to a spread of public anycast endpoints, sorted
+      fastest first &mdash; shows where your network routes well. Timed in the browser.</div>
+    <div class="row"><button class="btn go" id="lat-run">Ping all</button></div>
+    <div class="shbar"><button class="btn" id="lat-share" disabled>Share result</button></div>
+    <div class="out" id="lat-out"><div class="meta">not run yet.</div></div>
+  </section>
   <!-- ==================== PING ==================== -->
   <section class="card" id="ping">
     <h2>Ping <span class="dot" id="ping-dot"></span></h2>
@@ -244,98 +317,8 @@
 
     <div class="shbar"><button class="btn" id="ping-share" disabled>Share result</button></div>
   </section>
-
-  <!-- ==================== LATENCY MATRIX ==================== -->
-  <section class="card" id="lat">
-    <h2>Latency matrix <span class="dot" id="lat-dot"></span></h2>
-    <div class="sub">HTTPS round-trip from here to a spread of public anycast endpoints, sorted
-      fastest first &mdash; shows where your network routes well. Timed in the browser.</div>
-    <div class="row"><button class="btn go" id="lat-run">Ping all</button></div>
-    <div class="shbar"><button class="btn" id="lat-share" disabled>Share result</button></div>
-    <div class="out" id="lat-out"><div class="meta">not run yet.</div></div>
-  </section>
-
-  <!-- ==================== CONNECTION ==================== -->
-  <section class="card" id="conn">
-    <h2>Connection <span class="dot" id="conn-dot"></span></h2>
-    <div class="sub">What this device looks like from the internet &mdash; public IP, ASN, the
-      Cloudflare edge you land on, IPv6, HTTP version, and clock offset. Read straight from here.</div>
-    <div class="row"><button class="btn go" id="conn-run">Check</button></div>
-    <div class="shbar"><button class="btn" id="conn-share" disabled>Share result</button></div>
-    <div class="out" id="conn-out"><div class="meta">not checked yet.</div></div>
-  </section>
-
-  <!-- ==================== BANDWIDTH ==================== -->
-  <section class="card" id="bw">
-    <h2>Bandwidth <span class="dot" id="bw-dot"></span></h2>
-    <div class="sub">Down/up throughput to the nearest Cloudflare edge, sustained ~20&nbsp;s down /
-      ~12&nbsp;s up so the number is representative, not a burst. Live btop-style bar trace (down
-      up from the centre, up down from it) with latency-under-load. Fast links stop at ~800&nbsp;MB
-      down / 250&nbsp;MB up &mdash; mind mobile data. Every run is logged.</div>
-    <div class="row">
-      <button class="btn go" id="bw-run">Run test</button>
-      <button class="btn" id="bw-clear">Clear log</button>
-    </div>
-
-    <div class="gbox">
-      <div class="cap">
-        <span id="bw-cap">idle</span>
-        <span class="legend">
-          <span><i style="background:#7dcfff"></i>down</span>
-          <span><i style="background:#ff6ad5"></i>up</span>
-          <span><i style="background:#828cb4"></i>latency</span>
-        </span>
-      </div>
-      <canvas id="bwc"></canvas>
-    </div>
-
-    <div class="shbar"><button class="btn" id="bw-share" disabled>Share log</button></div>
-    <div class="out" id="bw-out"><div class="meta">not run yet.</div></div>
-  </section>
-
-  <!-- ==================== NAT TYPE ==================== -->
-  <section class="card" id="nat">
-    <h2>NAT type <span class="dot" id="nat-dot"></span></h2>
-    <div class="sub">WebRTC + public STUN: your public IP, whether outbound UDP works, and whether
-      your NAT is symmetric (bad for peer-to-peer, VoIP, hosting games). Local to the browser.</div>
-    <div class="row"><button class="btn go" id="nat-run">Check</button></div>
-    <div class="shbar"><button class="btn" id="nat-share" disabled>Share result</button></div>
-    <div class="out" id="nat-out"><div class="meta">not checked yet.</div></div>
-  </section>
-
-  <!-- ==================== TRACEROUTE ==================== -->
-  <section class="card needs-net" id="trace">
-    <h2>Traceroute <span class="dot" id="trace-dot"></span></h2>
-    <div class="offline-note">Runs on a Globalping probe, which is unreachable right now. Ping still works offline.</div>
-    <div class="sub">Runs from a Globalping probe &mdash; a browser can't send trace probes itself.
-      Roughly 250&nbsp;runs/hour per IP, unauthenticated.</div>
-
-    <div class="row">
-      <label class="fld grow">target host / ip
-        <input class="host" id="trace-target" type="text" placeholder="e.g. github.com" spellcheck="false" autocomplete="off">
-      </label>
-      <label class="fld">max hops
-        <input class="hops" id="trace-hops" type="number" min="1" max="20" value="20">
-      </label>
-    </div>
-    <div class="row">
-      <label class="fld from">probe location
-        <input class="from" id="trace-from" type="text" value="US" placeholder="US, New York, us-east-1&hellip;" spellcheck="false" autocomplete="off">
-      </label>
-      <label class="fld">protocol
-        <select id="trace-proto">
-          <option>ICMP</option><option>TCP</option><option>UDP</option>
-        </select>
-      </label>
-    </div>
-    <div class="row">
-      <button class="btn go" id="trace-run">Run</button>
-    </div>
-
-    <div class="shbar"><button class="btn" id="trace-share" disabled>Share result</button></div>
-    <div class="out" id="trace-out"><div class="meta">no trace yet.</div></div>
-  </section>
-
+  </div>
+  <div class="col">
   <!-- ==================== DNS ==================== -->
   <section class="card needs-net" id="dns">
     <h2>DNS lookup <span class="dot" id="dns-dot"></span></h2>
@@ -379,7 +362,38 @@
     <div class="shbar"><button class="btn" id="dns-share" disabled>Share result</button></div>
     <div class="out" id="dns-out"><div class="meta">no query yet.</div></div>
   </section>
+  <!-- ==================== TRACEROUTE ==================== -->
+  <section class="card needs-net" id="trace">
+    <h2>Traceroute <span class="dot" id="trace-dot"></span></h2>
+    <div class="offline-note">Runs on a Globalping probe, which is unreachable right now. Ping still works offline.</div>
+    <div class="sub">Runs from a Globalping probe &mdash; a browser can't send trace probes itself.
+      Roughly 250&nbsp;runs/hour per IP, unauthenticated.</div>
 
+    <div class="row">
+      <label class="fld grow">target host / ip
+        <input class="host" id="trace-target" type="text" placeholder="e.g. github.com" spellcheck="false" autocomplete="off">
+      </label>
+      <label class="fld">max hops
+        <input class="hops" id="trace-hops" type="number" min="1" max="20" value="20">
+      </label>
+    </div>
+    <div class="row">
+      <label class="fld from">probe location
+        <input class="from" id="trace-from" type="text" value="US" placeholder="US, New York, us-east-1&hellip;" spellcheck="false" autocomplete="off">
+      </label>
+      <label class="fld">protocol
+        <select id="trace-proto">
+          <option>ICMP</option><option>TCP</option><option>UDP</option>
+        </select>
+      </label>
+    </div>
+    <div class="row">
+      <button class="btn go" id="trace-run">Run</button>
+    </div>
+
+    <div class="shbar"><button class="btn" id="trace-share" disabled>Share result</button></div>
+    <div class="out" id="trace-out"><div class="meta">no trace yet.</div></div>
+  </section>
   <!-- ==================== WEB PROBE ==================== -->
   <section class="card needs-net" id="web">
     <h2>Web probe <span class="dot" id="web-dot"></span></h2>
@@ -429,7 +443,6 @@
     <div class="shbar"><button class="btn" id="web-share" disabled>Share result</button></div>
     <div class="out" id="web-out"><div class="meta">no probe yet.</div></div>
   </section>
-
   <!-- ==================== TLS CERTIFICATE ==================== -->
   <section class="card" id="tls">
     <h2>TLS certificate <span class="dot" id="tls-dot"></span></h2>
@@ -480,7 +493,7 @@
     <div class="shbar"><button class="btn" id="tls-share" disabled>Share result</button></div>
     <div class="out" id="tls-out"><div class="meta">load or paste a certificate file.</div></div>
   </section>
-
+  </div>
 </div>
 
 <footer>
@@ -961,7 +974,7 @@
   const BW = {
     streams: 4, upStreams: 3,
     downMs: 20000, upMs: 12000,        // sustained, not a burst
-    downCap: 800e6, upCap: 250e6,      // hard data ceilings (fast links stop early)
+    downCap: 1600e6, upCap: 500e6,     // hard data ceilings (fast links stop early)
     upBlob: 8e6, latMs: 300, sampleMs: 250, warmup: 3,
   };
   const bwc = $("#bwc"), bwx = bwc.getContext("2d");
