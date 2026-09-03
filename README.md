@@ -5,11 +5,16 @@ Tokyo Night theme, cyan/magenta ping graph on a 25% grey grid.
 
 **Live page:** https://vybenclave.github.io/browser-netstats/
 
-Five tools, laid out as a card grid:
+Nine tools in a card grid — single column on mobile, two centered columns on a
+wide screen:
 
 | Tool | Where it runs |
 | ---- | ------------- |
 | **Ping** | timed in your browser (HTTPS round-trip) |
+| **Latency matrix** | in your browser, to ~10 public anycast endpoints |
+| **Connection** | direct fetches to Cloudflare edge |
+| **Bandwidth** | direct up/down streams to Cloudflare edge |
+| **NAT type** | WebRTC + public STUN, in your browser |
 | **Traceroute** | on a [Globalping](https://globalping.io) probe |
 | **DNS lookup** | on a Globalping probe (pick the resolver) |
 | **Web probe** | on a Globalping probe |
@@ -27,6 +32,28 @@ Every card has a **Share result** button. It opens a small menu:
 
 The button stays usable on the probe-backed cards even after Globalping goes
 offline, so a result you already have can still be shared.
+
+## Local diagnostics (no probe)
+
+These run entirely from the browser:
+
+- **Latency matrix** - HTTPS round-trip to Cloudflare, Google, Quad9, AWS,
+  Azure, GCP, GitHub, sorted fastest first with a bar. Shows where your network
+  routes well.
+- **Connection** - public IP, ASN + network, geo, the Cloudflare edge (colo)
+  you land on, negotiated HTTP version, TLS version, post-quantum key exchange,
+  WARP status, IPv6 reachability, the browser's own link estimate
+  (`navigator.connection`, Chrome/Android), and clock offset from the server
+  `Date` header. ASN/city need a hosted origin; from a local file you still get
+  IP / edge / HTTP / TLS / IPv6 from `cdn-cgi/trace`.
+- **Bandwidth** - 4 parallel down streams + 3 up streams to
+  `speed.cloudflare.com`, plus latency probes during the download →
+  **bufferbloat** grade (idle vs loaded RTT). ~40 MB down / 15 MB up; watch
+  mobile data.
+- **NAT type** - `RTCPeerConnection` against Google + Cloudflare STUN: public
+  IP, whether outbound UDP works at all, and cone vs **symmetric** NAT (compares
+  the mapped port from each STUN server). Local host candidates are mDNS-hidden
+  by modern browsers; if a real private IP leaks, it's flagged.
 
 ## Ping
 

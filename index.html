@@ -15,10 +15,10 @@
     --panel-2:#24283b;
     --field:#10121c;
     --border:#2b3350;
-    --fg:#c0caf5;
-    --fg-dim:#a9b1d6;
-    --dim:#8b93b8;          /* brighter than grid, dimmer than fg */
-    --muted:#565f89;
+    --fg:#d6ddf8;
+    --fg-dim:#bfc7ea;
+    --dim:#a2abcf;          /* brighter than grid, dimmer than fg */
+    --muted:#828cb4;
     /* accents */
     --cyan:#7dcfff;
     --magenta:#ff6ad5;
@@ -34,15 +34,16 @@
   body{
     margin:0;
     font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-    background:radial-gradient(1200px 820px at 72% -12%, var(--bg-2), var(--bg)) fixed;
+    background:#000;
     color:var(--fg);
   }
+  header,footer{max-width:1000px;margin-left:auto;margin-right:auto}
   header{padding:20px 24px 4px}
-  h1{margin:0;font-size:19px;letter-spacing:.5px}
+  h1{margin:0;font-size:20px;letter-spacing:.5px}
   h1 .a{color:var(--cyan)}
   h1 .b{color:var(--magenta)}
-  header p{margin:6px 0 0;font-size:12px;line-height:1.55;color:var(--muted);max-width:88ch}
-  .netbar{margin-top:12px;display:inline-flex;align-items:center;gap:8px;font-size:11px;
+  header p{margin:6px 0 0;font-size:13px;line-height:1.55;color:var(--muted);max-width:88ch}
+  .netbar{margin-top:12px;display:inline-flex;align-items:center;gap:8px;font-size:12px;
           border:1px solid var(--border);border-radius:8px;padding:5px 11px;color:var(--dim);max-width:92ch}
   .netbar .nb-dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex:none}
   .netbar.checking .nb-dot{background:var(--yellow)}
@@ -51,57 +52,60 @@
   .netbar.offline{color:var(--yellow);border-color:var(--yellow)}
   .netbar.offline .nb-dot{background:var(--yellow);box-shadow:0 0 6px var(--yellow)}
 
-  .offline-note{display:none;margin:6px 0 2px;font-size:11px;color:var(--yellow);
+  .offline-note{display:none;margin:6px 0 2px;font-size:12px;color:var(--yellow);
                 border:1px solid var(--yellow);border-radius:7px;padding:6px 9px;line-height:1.5}
   body.net-offline .needs-net .offline-note{display:block}
   body.net-offline .needs-net .row,
   body.net-offline .needs-net .providers{opacity:.4;pointer-events:none}
 
   .grid{
-    display:grid;gap:16px;align-items:start;
-    grid-template-columns:repeat(auto-fill,minmax(440px,1fr));
-    padding:16px 24px 28px;
+    display:grid;gap:18px;align-items:start;
+    grid-template-columns:1fr;
+    max-width:520px;margin:0 auto;
+    padding:16px 20px 34px;
   }
-  @media (max-width:520px){ .grid{grid-template-columns:1fr} }
+  @media (min-width:1000px){
+    .grid{grid-template-columns:repeat(2,minmax(0,480px));max-width:1000px}
+  }
 
-  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px;max-width:520px}
-  .card h2{margin:0;font-size:14px;color:var(--fg)}
-  .card .sub{font-size:11px;color:var(--dim);margin:3px 0 4px;line-height:1.5}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px}
+  .card h2{margin:0;font-size:15px;color:var(--fg)}
+  .card .sub{font-size:12px;color:var(--dim);margin:3px 0 4px;line-height:1.5}
 
   .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--muted);margin-left:7px;vertical-align:middle}
   .dot.live{background:var(--green);box-shadow:0 0 7px var(--green)}
   .dot.busy{background:var(--yellow);box-shadow:0 0 7px var(--yellow)}
 
   .btn{
-    font:inherit;font-size:12px;background:var(--panel-2);color:var(--fg-dim);
+    font:inherit;font-size:13px;background:var(--panel-2);color:var(--fg-dim);
     border:1px solid var(--border);border-radius:7px;padding:7px 12px;cursor:pointer;
     transition:border-color .12s,color .12s,background .12s;
   }
   .btn:hover:not(:disabled){border-color:var(--cyan);color:var(--fg)}
   .btn:disabled{opacity:.45;cursor:default}
-  .btn.sm{padding:5px 10px;font-size:11px}
+  .btn.sm{padding:5px 10px;font-size:12px}
   .btn.on{background:rgba(125,207,255,.14);border-color:var(--cyan);color:var(--cyan)}
   .btn.go{border-color:var(--green);color:var(--green)}
   .btn.go.stop{border-color:var(--red);color:var(--red)}
 
   .providers{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
   .prov{display:flex;flex-direction:column;gap:6px}
-  .ph{font-size:10px;text-transform:uppercase;letter-spacing:.13em;color:var(--dim);text-align:center}
+  .ph{font-size:11px;text-transform:uppercase;letter-spacing:.13em;color:var(--dim);text-align:center}
   .prov .btn{width:100%}
 
   .row{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-top:10px}
-  .fld{display:flex;flex-direction:column;gap:3px;font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--dim)}
+  .fld{display:flex;flex-direction:column;gap:3px;font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--dim)}
   .fld.grow{flex:1;min-width:150px}
   input,select{
-    font:inherit;font-size:12px;background:var(--field);color:var(--fg);
+    font:inherit;font-size:13px;background:var(--field);color:var(--fg);
     border:1px solid var(--border);border-radius:7px;padding:6px 9px;
   }
   input:focus,select:focus{outline:none;border-color:var(--magenta)}
   input.host{width:100%;min-width:0}
   input.hops{width:74px}
   input.from{width:150px}
-  input[type=file]{font:inherit;font-size:11px;color:var(--fg-dim);border:0;padding:0}
-  textarea{font:inherit;font-size:12px;background:var(--field);color:var(--fg);border:1px solid var(--border);
+  input[type=file]{font:inherit;font-size:12px;color:var(--fg-dim);border:0;padding:0}
+  textarea{font:inherit;font-size:13px;background:var(--field);color:var(--fg);border:1px solid var(--border);
            border-radius:7px;padding:7px 9px;width:100%;resize:vertical;line-height:1.4}
   textarea:focus{outline:none;border-color:var(--magenta)}
   #tls-local-pane.drag{outline:1px dashed var(--cyan);outline-offset:5px;border-radius:8px}
@@ -110,21 +114,21 @@
 
   .stats{margin-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:8px}
   .stat{background:var(--field);border:1px solid var(--border);border-radius:8px;padding:8px 10px;min-width:0}
-  .stat .k{font-size:9px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted)}
-  .stat .v{font-size:17px;margin-top:3px;color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .stat .v.sm{font-size:12px;white-space:normal}
+  .stat .k{font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted)}
+  .stat .v{font-size:18px;margin-top:3px;color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .stat .v.sm{font-size:13px;white-space:normal}
   .stat.loss .v{color:var(--magenta)}
 
   .gbox{margin-top:12px;background:var(--field);border:1px solid var(--border);border-radius:8px;padding:8px}
-  .gbox .cap{display:flex;justify-content:space-between;align-items:center;font-size:10px;color:var(--dim)}
+  .gbox .cap{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--dim)}
   canvas{width:100%;height:100px;display:block}
   .legend{display:flex;gap:12px}
   .legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:middle}
 
   .out{margin-top:12px}
-  .meta{font-size:11px;color:var(--dim)}
+  .meta{font-size:12px;color:var(--dim)}
   .meta.err{color:var(--red)}
-  .tbl{width:100%;border-collapse:collapse;font-size:11px;margin-top:8px}
+  .tbl{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
   .tbl th{text-align:left;font-weight:normal;color:var(--dim);padding:4px 8px;border-bottom:1px solid var(--border)}
   .tbl td{padding:4px 8px;border-bottom:1px solid rgba(255,255,255,.045);color:var(--fg-dim);
           white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:190px}
@@ -132,10 +136,10 @@
   .tbl td.up{color:var(--green)}
   .tbl td.down{color:var(--muted)}
   pre.raw{margin-top:8px;max-height:150px;overflow:auto;background:#0b0d16;border:1px solid var(--border);
-          border-radius:6px;padding:8px;font-size:10.5px;line-height:1.45;color:var(--fg-dim);white-space:pre}
-  code{background:var(--field);border:1px solid var(--border);border-radius:4px;padding:0 4px;font-size:10.5px}
+          border-radius:6px;padding:8px;font-size:11.5px;line-height:1.45;color:var(--fg-dim);white-space:pre}
+  code{background:var(--field);border:1px solid var(--border);border-radius:4px;padding:0 4px;font-size:11.5px}
 
-  .badge{display:inline-block;font-size:10px;padding:1px 6px;border-radius:5px;border:1px solid var(--border);
+  .badge{display:inline-block;font-size:11px;padding:1px 6px;border-radius:5px;border:1px solid var(--border);
          color:var(--fg-dim);white-space:nowrap}
   .badge.ok{border-color:var(--green);color:var(--green)}
   .badge.warn{border-color:var(--yellow);color:var(--yellow)}
@@ -144,9 +148,9 @@
 
   .svc{margin-top:8px;border:1px solid var(--border);border-radius:8px;overflow:hidden}
   .svc-h{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--field);
-         padding:6px 9px;font-size:11px;color:var(--fg-dim)}
+         padding:6px 9px;font-size:12px;color:var(--fg-dim)}
   .svc-h b{color:var(--fg)}
-  .kv{width:100%;border-collapse:collapse;font-size:11px}
+  .kv{width:100%;border-collapse:collapse;font-size:12px}
   .kv td{padding:3px 9px;border-top:1px solid rgba(255,255,255,.045);vertical-align:top}
   .kv td:first-child{color:var(--dim);white-space:nowrap;width:104px}
   .kv td:last-child{color:var(--fg-dim);word-break:break-all}
@@ -154,12 +158,12 @@
   .sharemenu{position:absolute;z-index:60;background:var(--panel-2);border:1px solid var(--border);
              border-radius:8px;padding:4px;display:flex;flex-direction:column;min-width:132px;
              box-shadow:0 8px 24px rgba(0,0,0,.45)}
-  .sharemenu button{font:inherit;font-size:12px;text-align:left;background:none;border:0;color:var(--fg-dim);
+  .sharemenu button{font:inherit;font-size:13px;text-align:left;background:none;border:0;color:var(--fg-dim);
                     padding:6px 10px;border-radius:6px;cursor:pointer}
   .sharemenu button:hover{background:rgba(125,207,255,.13);color:var(--fg)}
   .shbar{margin-top:12px}
 
-  footer{padding:0 24px 22px;font-size:11px;color:var(--muted)}
+  footer{padding:0 24px 22px;font-size:12px;color:var(--muted)}
   footer a{color:var(--blue)}
 </style>
 </head>
@@ -238,6 +242,46 @@
     </div>
 
     <div class="shbar"><button class="btn" id="ping-share" disabled>Share result</button></div>
+  </section>
+
+  <!-- ==================== LATENCY MATRIX ==================== -->
+  <section class="card" id="lat">
+    <h2>Latency matrix <span class="dot" id="lat-dot"></span></h2>
+    <div class="sub">HTTPS round-trip from here to a spread of public anycast endpoints, sorted
+      fastest first &mdash; shows where your network routes well. Timed in the browser.</div>
+    <div class="row"><button class="btn go" id="lat-run">Ping all</button></div>
+    <div class="shbar"><button class="btn" id="lat-share" disabled>Share result</button></div>
+    <div class="out" id="lat-out"><div class="meta">not run yet.</div></div>
+  </section>
+
+  <!-- ==================== CONNECTION ==================== -->
+  <section class="card" id="conn">
+    <h2>Connection <span class="dot" id="conn-dot"></span></h2>
+    <div class="sub">What this device looks like from the internet &mdash; public IP, ASN, the
+      Cloudflare edge you land on, IPv6, HTTP version, and clock offset. Read straight from here.</div>
+    <div class="row"><button class="btn go" id="conn-run">Check</button></div>
+    <div class="shbar"><button class="btn" id="conn-share" disabled>Share result</button></div>
+    <div class="out" id="conn-out"><div class="meta">not checked yet.</div></div>
+  </section>
+
+  <!-- ==================== BANDWIDTH ==================== -->
+  <section class="card" id="bw">
+    <h2>Bandwidth <span class="dot" id="bw-dot"></span></h2>
+    <div class="sub">Download / upload throughput to the nearest Cloudflare edge, plus latency
+      under load (bufferbloat). ~15&nbsp;s, uses a few tens of MB &mdash; mind mobile data.</div>
+    <div class="row"><button class="btn go" id="bw-run">Run test</button></div>
+    <div class="shbar"><button class="btn" id="bw-share" disabled>Share result</button></div>
+    <div class="out" id="bw-out"><div class="meta">not run yet.</div></div>
+  </section>
+
+  <!-- ==================== NAT TYPE ==================== -->
+  <section class="card" id="nat">
+    <h2>NAT type <span class="dot" id="nat-dot"></span></h2>
+    <div class="sub">WebRTC + public STUN: your public IP, whether outbound UDP works, and whether
+      your NAT is symmetric (bad for peer-to-peer, VoIP, hosting games). Local to the browser.</div>
+    <div class="row"><button class="btn go" id="nat-run">Check</button></div>
+    <div class="shbar"><button class="btn" id="nat-share" disabled>Share result</button></div>
+    <div class="out" id="nat-out"><div class="meta">not checked yet.</div></div>
   </section>
 
   <!-- ==================== TRACEROUTE ==================== -->
@@ -664,7 +708,7 @@
       scaleMax = niceMax(Math.max(50, p95));
     }
 
-    ctx.font = "9px ui-monospace, monospace";
+    ctx.font = "10px ui-monospace, monospace";
     ctx.textBaseline = "middle";
     const rows = gh < 120 ? 2 : 4;
     for (let i = 0; i <= rows; i++) {
@@ -673,7 +717,7 @@
       ctx.globalAlpha = i === rows ? 0.7 : 0.4;
       ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(w - padR, y); ctx.stroke();
       ctx.globalAlpha = 1;
-      ctx.fillStyle = "#9aa5ce";
+      ctx.fillStyle = "#b6bfe0";
       ctx.fillText(Math.round(scaleMax * (1 - i / rows)), 6, y);
     }
 
@@ -743,6 +787,300 @@
   $("#ping-use").addEventListener("click", useCustom);
   $("#ping-custom").addEventListener("keydown", e => { if (e.key === "Enter") useCustom(); });
   window.addEventListener("resize", render);
+
+  // =====================================================================
+  //  LOCAL DIAGNOSTICS  -- latency matrix / connection / bandwidth / NAT
+  //  (all measured directly from this browser, no probe)
+  // =====================================================================
+  const busy = (btnSel, dotSel, on) => { $(btnSel).disabled = on; $(dotSel).classList.toggle("busy", on); };
+  const kvTable = pairs => '<table class="kv">' + pairs.filter(Boolean).map(p =>
+    "<tr><td>" + esc(p[0]) + "</td><td>" + (p[2] ? p[1] : esc(p[1])) + "</td></tr>").join("") + "</table>";
+  const mbps = (bytes, ms) => ms > 0 ? bytes * 8 / (ms / 1000) / 1e6 : 0;
+  const fix = (n, d = 1) => isFinite(n) ? n.toFixed(d) : "—";
+
+  // ---- latency matrix ----
+  const LAT_HOSTS = [
+    ["Cloudflare 1.1.1.1", "1.1.1.1"],
+    ["Cloudflare DNS", "cloudflare-dns.com"],
+    ["Google 8.8.8.8", "8.8.8.8"],
+    ["Google DNS", "dns.google"],
+    ["Quad9 9.9.9.9", "9.9.9.9"],
+    ["AWS us-east-1", "dynamodb.us-east-1.amazonaws.com"],
+    ["AWS us-west-2", "dynamodb.us-west-2.amazonaws.com"],
+    ["Azure East US", "eastus.api.cognitive.microsoft.com"],
+    ["GCP us-east1", "us-east1-aiplatform.googleapis.com"],
+    ["GitHub API", "api.github.com"],
+  ];
+  let lastLat = null;
+
+  function latDraw(rows) {
+    const done = rows.filter(r => r.ms !== null);
+    const finite = done.map(r => r.ms).filter(v => isFinite(v));
+    const scale = finite.length ? Math.max(50, ...finite) : 100;
+    const sorted = rows.slice().sort((a, b) => (a.ms == null ? 1e9 : a.ms) - (b.ms == null ? 1e9 : b.ms));
+    $("#lat-out").innerHTML = '<div class="meta">' + done.length + " / " + rows.length + " tested</div>" +
+      '<table class="tbl"><tbody>' + sorted.map(r => {
+        const v = r.ms == null ? "…" : !isFinite(r.ms) ? "timeout" : Math.round(r.ms) + " ms";
+        const w = (r.ms && isFinite(r.ms)) ? Math.max(2, Math.round(r.ms / scale * 100)) : 0;
+        return "<tr><td>" + esc(r.name) + "</td><td style=\"width:44%\">" +
+          "<span style=\"display:inline-block;height:8px;border-radius:2px;background:var(--cyan);width:" +
+          w + "%\"></span></td><td style=\"text-align:right\">" + v + "</td></tr>";
+      }).join("") + "</tbody></table>";
+  }
+  async function latRun() {
+    busy("#lat-run", "#lat-dot", true);
+    const rows = LAT_HOSTS.map(([name, host]) => ({ name, host, ms: null }));
+    latDraw(rows);
+    await Promise.all(rows.map(async r => {
+      const t = [];
+      for (let i = 0; i < 5; i++) { const v = await ping(r.host); if (i > 0) t.push(v === null ? Infinity : v); }
+      const ok = t.filter(isFinite);
+      r.ms = ok.length ? Math.min(...ok) : Infinity;
+      latDraw(rows);
+    }));
+    lastLat = rows.slice().sort((a, b) => (a.ms == null ? 1e9 : a.ms) - (b.ms == null ? 1e9 : b.ms));
+    $("#lat-share").disabled = false;
+    busy("#lat-run", "#lat-dot", false);
+  }
+  function latReport() {
+    if (!lastLat) return null;
+    const csv = csvString([["endpoint", "host", "rtt_ms"],
+      ...lastLat.map(r => [r.name, r.host, isFinite(r.ms) ? Math.round(r.ms) : "timeout"])]);
+    const txt = ["Browser Network Toolkit — Latency matrix", "when : " + new Date().toISOString(), "",
+      ...lastLat.map(r => (isFinite(r.ms) ? Math.round(r.ms) + " ms" : "timeout").padStart(9) +
+        "  " + r.name + "  (" + r.host + ")")].join("\n");
+    return { base: "latency_" + stamp(), title: "Latency matrix", txt, csv };
+  }
+  $("#lat-run").addEventListener("click", latRun);
+  makeShare("#lat-share", latReport);
+
+  // ---- connection ----
+  let lastConn = null;
+  async function connCheck() {
+    busy("#conn-run", "#conn-dot", true);
+    $("#conn-out").innerHTML = '<div class="meta">checking &hellip;</div>';
+    const out = {};
+    await Promise.all([
+      (async () => {
+        try {
+          const t0 = performance.now();
+          const r = await fetch("https://speed.cloudflare.com/meta", { cache: "no-store" });
+          out.meta = await r.json();
+          const d = r.headers.get("date");
+          if (d) out.clockMs = new Date(d).getTime() - (Date.now() - (performance.now() - t0) / 2);
+        } catch (e) { out.metaErr = e.message; }
+      })(),
+      (async () => {
+        try {
+          const r = await fetch("https://cloudflare-dns.com/cdn-cgi/trace", { cache: "no-store" });
+          out.trace = Object.fromEntries((await r.text()).trim().split("\n").map(l => l.split("=")));
+        } catch (_) { /* optional */ }
+      })(),
+      (async () => {
+        const ac = new AbortController();
+        const to = setTimeout(() => ac.abort(), 4000);
+        try {
+          await fetch("https://ipv6.google.com/generate_204", { mode: "no-cors", cache: "no-store", signal: ac.signal });
+          out.v6 = true;
+        } catch (_) { out.v6 = false; } finally { clearTimeout(to); }
+      })(),
+    ]);
+
+    const m = out.meta || {}, tr = out.trace || {}, nc = navigator.connection || {};
+    const link = nc.effectiveType
+      ? nc.effectiveType + (nc.downlink ? "  ·  ~" + nc.downlink + " Mbps" : "") + (nc.rtt ? "  ·  ~" + nc.rtt + " ms" : "")
+      : "n/a (Chrome/Android only)";
+    lastConn = { m, tr, link, v6: out.v6, clockMs: out.clockMs };
+    if (out.metaErr && !m.clientIp && !tr.ip) {
+      $("#conn-out").innerHTML = '<div class="meta err">couldn\'t reach Cloudflare (' + esc(out.metaErr) + ")</div>";
+    } else {
+      $("#conn-out").innerHTML = kvTable([
+        ["public IP", m.clientIp || tr.ip || "—"],
+        ["ASN", m.asn ? "AS" + m.asn + (m.asOrganization ? "  " + m.asOrganization : "") : "— (needs a hosted origin)"],
+        ["location", [m.city, m.region, m.country].filter(Boolean).join(", ") || tr.loc || "—"],
+        ["edge (CF)", m.colo ? m.colo.iata + (m.colo.city ? "  " + m.colo.city : "") : (tr.colo || "—")],
+        ["HTTP", tr.http || m.httpProtocol || "—"],
+        ["TLS", tr.tls || "—"],
+        tr.kex ? ["key exchange", tr.kex] : null,
+        ["WARP", tr.warp || "—"],
+        ["IPv6", out.v6 == null ? "—" : out.v6 ? "reachable" : "no route from here"],
+        ["link (browser)", link],
+        ["clock offset", out.clockMs == null ? "—"
+          : (out.clockMs / 1000).toFixed(1) + " s" + (Math.abs(out.clockMs) > 2500 ? "  (!)" : "")],
+      ]);
+    }
+    $("#conn-share").disabled = false;
+    busy("#conn-run", "#conn-dot", false);
+  }
+  function connReport() {
+    if (!lastConn) return null;
+    const { m, tr, link, v6, clockMs } = lastConn;
+    const rows = [
+      ["public_ip", m.clientIp || tr.ip || ""],
+      ["asn", m.asn ? "AS" + m.asn : ""],
+      ["network", m.asOrganization || ""],
+      ["location", [m.city, m.region, m.country].filter(Boolean).join(", ") || tr.loc || ""],
+      ["cf_edge", m.colo ? m.colo.iata : (tr.colo || "")],
+      ["http", tr.http || m.httpProtocol || ""],
+      ["tls", tr.tls || ""],
+      ["warp", tr.warp || ""],
+      ["ipv6", v6 == null ? "" : v6 ? "reachable" : "no-route"],
+      ["link", link],
+      ["clock_offset_s", clockMs == null ? "" : (clockMs / 1000).toFixed(1)],
+    ];
+    return {
+      base: "connection_" + stamp(), title: "Connection",
+      csv: csvString([["field", "value"], ...rows]),
+      txt: ["Browser Network Toolkit — Connection", "when : " + new Date().toISOString(), "",
+        ...rows.map(r => r[0].padEnd(16) + ": " + r[1])].join("\n"),
+    };
+  }
+  $("#conn-run").addEventListener("click", connCheck);
+  makeShare("#conn-share", connReport);
+
+  // ---- bandwidth ----
+  const BW = { downStreams: 4, downBytes: 10e6, upStreams: 3, upBytes: 5e6, latPings: 12 };
+  let lastBw = null;
+
+  async function bwPing() {
+    const t0 = performance.now();
+    try { await fetch("https://speed.cloudflare.com/__down?bytes=0&r=" + Math.random(), { cache: "no-store" }); }
+    catch (_) { return null; }
+    return performance.now() - t0;
+  }
+  async function bwRun() {
+    busy("#bw-run", "#bw-dot", true);
+    const set = h => { $("#bw-out").innerHTML = h; };
+
+    set('<div class="meta">idle latency &hellip;</div>');
+    const idle = [];
+    for (let i = 0; i < BW.latPings; i++) { const v = await bwPing(); if (v != null) idle.push(v); }
+    idle.sort((a, b) => a - b);
+    const idleMed = idle.length ? idle[idle.length >> 1] : NaN;
+    const jitter = idle.length > 1 ? idle[idle.length - 1] - idle[0] : NaN;
+
+    set('<div class="meta">download &hellip;</div>');
+    const loaded = [];
+    let stopLat = false;
+    (async () => { while (!stopLat) { const v = await bwPing(); if (v != null) loaded.push(v); await sleep(250); } })();
+    const dT0 = performance.now();
+    await Promise.all(Array.from({ length: BW.downStreams }, () =>
+      fetch("https://speed.cloudflare.com/__down?bytes=" + BW.downBytes + "&r=" + Math.random(),
+        { cache: "no-store" }).then(r => r.arrayBuffer()).catch(() => {})));
+    const downMs = performance.now() - dT0;
+    stopLat = true;
+    const downMbps = mbps(BW.downStreams * BW.downBytes, downMs);
+    loaded.sort((a, b) => a - b);
+    const loadedMed = loaded.length ? loaded[loaded.length >> 1] : NaN;
+
+    set('<div class="meta">upload &hellip;</div>');
+    const body = new Blob([new Uint8Array(BW.upBytes)]);
+    const uT0 = performance.now();
+    await Promise.all(Array.from({ length: BW.upStreams }, () =>
+      fetch("https://speed.cloudflare.com/__up", { method: "POST", body, cache: "no-store" }).catch(() => {})));
+    const upMbps = mbps(BW.upStreams * BW.upBytes, performance.now() - uT0);
+
+    const bloat = isFinite(loadedMed) && isFinite(idleMed) ? loadedMed - idleMed : NaN;
+    const grade = !isFinite(bloat) ? "—" : bloat < 20 ? "A (excellent)" : bloat < 50 ? "B (good)"
+      : bloat < 100 ? "C (fair)" : bloat < 200 ? "D (poor)" : "F (bad)";
+    lastBw = { downMbps, upMbps, idleMed, loadedMed, bloat, jitter, grade };
+    set(kvTable([
+      ["download", fix(downMbps) + " Mbps"],
+      ["upload", fix(upMbps) + " Mbps"],
+      ["latency idle", fix(idleMed, 0) + " ms"],
+      ["latency loaded", fix(loadedMed, 0) + " ms"],
+      ["bufferbloat", fix(bloat, 0) + " ms  ·  " + grade],
+      ["jitter", fix(jitter, 0) + " ms"],
+    ]));
+    $("#bw-share").disabled = false;
+    busy("#bw-run", "#bw-dot", false);
+  }
+  function bwReport() {
+    if (!lastBw) return null;
+    const b = lastBw;
+    const rows = [["download_mbps", fix(b.downMbps)], ["upload_mbps", fix(b.upMbps)],
+      ["latency_idle_ms", fix(b.idleMed, 0)], ["latency_loaded_ms", fix(b.loadedMed, 0)],
+      ["bufferbloat_ms", fix(b.bloat, 0)], ["bufferbloat_grade", b.grade], ["jitter_ms", fix(b.jitter, 0)]];
+    return {
+      base: "bandwidth_" + stamp(), title: "Bandwidth test",
+      csv: csvString([["field", "value"], ...rows]),
+      txt: ["Browser Network Toolkit — Bandwidth", "when : " + new Date().toISOString(), "",
+        ...rows.map(r => r[0].padEnd(18) + ": " + r[1])].join("\n"),
+    };
+  }
+  $("#bw-run").addEventListener("click", bwRun);
+  makeShare("#bw-share", bwReport);
+
+  // ---- NAT type (WebRTC + STUN) ----
+  let lastNat = null;
+  function parseCand(str) {
+    const p = str.split(" ");
+    return { type: p[p.indexOf("typ") + 1], ip: p[4], port: p[5] };
+  }
+  async function natCheck() {
+    if (typeof RTCPeerConnection === "undefined") {
+      $("#nat-out").innerHTML = '<div class="meta err">WebRTC is not available in this browser.</div>';
+      return;
+    }
+    busy("#nat-run", "#nat-dot", true);
+    $("#nat-out").innerHTML = '<div class="meta">gathering ICE candidates &hellip;</div>';
+    const stun = ["stun:stun.l.google.com:19302", "stun:stun.cloudflare.com:3478"];
+    const pc = new RTCPeerConnection({ iceServers: stun.map(urls => ({ urls })) });
+    pc.createDataChannel("x");
+    const srflx = [], host = [];
+    pc.onicecandidate = e => {
+      if (!e.candidate || !e.candidate.candidate) return;
+      const c = parseCand(e.candidate.candidate);
+      c.url = e.candidate.url || "";
+      if (c.type === "srflx") srflx.push(c);
+      else if (c.type === "host") host.push(c);
+    };
+    await pc.setLocalDescription(await pc.createOffer());
+    await new Promise(res => {
+      pc.onicegatheringstatechange = () => { if (pc.iceGatheringState === "complete") res(); };
+      setTimeout(res, 4000);
+    });
+    pc.close();
+
+    const pubIps = [...new Set(srflx.map(c => c.ip))];
+    const byUrl = {};
+    srflx.forEach(c => { (byUrl[c.url] = byUrl[c.url] || []).push(c.port); });
+    const urls = Object.keys(byUrl);
+    const realLocal = host.filter(c => /^\d+\.\d+\.\d+\.\d+$/.test(c.ip)).map(c => c.ip);
+    let nat;
+    if (!srflx.length) nat = "UDP blocked / STUN unreachable";
+    else if (realLocal.some(ip => pubIps.includes(ip))) nat = "open (no NAT)";
+    else if (urls.length >= 2 && byUrl[urls[0]][0] !== byUrl[urls[1]][0])
+      nat = "symmetric (endpoint-dependent) — bad for P2P / VoIP";
+    else nat = "cone (endpoint-independent) — P2P OK";
+
+    lastNat = { pubIps, nat, byUrl, realLocal, count: srflx.length };
+    $("#nat-out").innerHTML = kvTable([
+      ["public IP", pubIps.join(", ") || "—"],
+      ["NAT", nat],
+      ["UDP out", srflx.length ? "works (" + srflx.length + " srflx candidate" + (srflx.length === 1 ? "" : "s") + ")" : "blocked"],
+      ["mapped ports", urls.length ? urls.map(u => u.replace(/^stun:/, "") + " -> " + byUrl[u].join("/")).join("   ") : "—"],
+      ["local candidates", host.length ? host.map(c => c.ip).join(", ") : "none (mDNS-hidden)"],
+      realLocal.length ? ["note", "a real private IP was exposed by WebRTC (" + realLocal.join(", ") + ")"] : null,
+    ]);
+    $("#nat-share").disabled = false;
+    busy("#nat-run", "#nat-dot", false);
+  }
+  function natReport() {
+    if (!lastNat) return null;
+    const n = lastNat;
+    const rows = [["public_ip", n.pubIps.join(" ")], ["nat_type", n.nat],
+      ["udp_out", n.count ? "works" : "blocked"], ["srflx_count", n.count],
+      ["local_ip_exposed", n.realLocal.join(" ") || "none"]];
+    return {
+      base: "nat_" + stamp(), title: "NAT type",
+      csv: csvString([["field", "value"], ...rows]),
+      txt: ["Browser Network Toolkit — NAT type", "when : " + new Date().toISOString(), "",
+        ...rows.map(r => r[0].padEnd(16) + ": " + r[1])].join("\n"),
+    };
+  }
+  $("#nat-run").addEventListener("click", natCheck);
+  makeShare("#nat-share", natReport);
 
   // =====================================================================
   //  GLOBALPING  -- shared client for probe-run measurements
