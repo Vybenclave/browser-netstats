@@ -11,7 +11,7 @@ Three tools, laid out as a card grid:
 | ---- | ------------- | ------- |
 | **Ping** | timed in your browser (HTTPS round-trip) | CSV, last 60 s |
 | **Traceroute** | on a [Globalping](https://globalping.io) probe | CSV of the trace |
-| **DNS lookup** | DNS-over-HTTPS, from your browser | - |
+| **DNS lookup** | on a Globalping probe (pick the resolver) | - |
 
 ## Ping
 
@@ -67,10 +67,24 @@ Output is a hop table (`# / host / ip / rtt`) plus the raw probe output.
 
 ## DNS lookup
 
-Resolves over DNS-over-HTTPS straight from the browser - pick **Cloudflare**
-(`1.1.1.1`) or **Google** (`8.8.8.8`), a record **type** (A, AAAA, CNAME, MX,
-TXT, NS, SOA, CAA, PTR, SRV), and a name. Shows the response code, query time,
-and an answer table (`name / type / ttl / data`).
+Also runs on a Globalping probe, which is what makes the **resolver** a choice:
+**Default** (the probe's own resolver), **Cloudflare** `1.1.1.1`, **Google**
+`8.8.8.8`, **Comcast** `75.75.75.75`, or **Custom** (any resolver IP or FQDN).
+`75.75.75.75` only answers Comcast subscribers, so picking Comcast also pins
+the probe onto Comcast's network (AS7922).
+
+Types: A, AAAA, CNAME, NS, MX, TXT, SOA, SRV, PTR, plus two shortcuts:
+
+- **SPF** - queries TXT at the name and highlights the `v=spf1` record.
+- **DMARC** - queries TXT at `_dmarc.<name>` and highlights the `v=DMARC1`
+  record.
+
+**Reverse lookup** - pick PTR, or just enter an IP with any type (a bare IP,
+or a `.in-addr.arpa` / `.ip6.arpa` name, is turned into a PTR query
+automatically).
+
+Output shows the resolver that answered, the response code, query time, and an
+answer table (`name / type / ttl / data`).
 
 ## Run it
 
@@ -87,8 +101,8 @@ To serve it locally instead:
 python -m http.server -d browser-netstats 8080
 ```
 
-The ping and DNS tools work from `file://`. Traceroute needs network access
-to `api.globalping.io`.
+Ping works from `file://`; traceroute and DNS need network access to
+`api.globalping.io`.
 
 ## Configuration
 
@@ -102,8 +116,9 @@ const CSV_WINDOW = 60000;  // ms of ping history kept for export
 const AVG_WIN    = 8;      // samples in the rolling-average line
 ```
 
-Edit the `TARGETS` map for ping presets; `TYPE_BY_NUM` covers the DNS record
-types the UI offers.
+Edit the `TARGETS` map for ping presets. The DNS resolver presets are just
+`<option value>` IPs in the markup, and `DNS_VIRTUAL` maps the SPF / DMARC
+shortcuts onto TXT.
 
 ## License
 

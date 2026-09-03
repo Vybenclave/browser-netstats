@@ -29,6 +29,7 @@
     --grid:#404040;         /* 25% grey */
   }
   *{box-sizing:border-box}
+  [hidden]{display:none!important}
   html,body{min-height:100%}
   body{
     margin:0;
@@ -118,9 +119,10 @@
 <header>
   <h1>Browser <span class="a">Network</span> <span class="b">Toolkit</span></h1>
   <p>A few network tools that run in the page. <b>Ping</b> is timed from your browser as an HTTPS
-     round-trip (not ICMP), once every 500&nbsp;ms. <b>Traceroute</b> can't run in a browser at all,
-     so it executes on a <a href="https://globalping.io">Globalping</a> probe. <b>DNS</b> is resolved
-     over DoH straight from here. Ping and traceroute results export to CSV.</p>
+     round-trip (not ICMP), once every 500&nbsp;ms. <b>Traceroute</b> and <b>DNS</b> can't run in a
+     browser directly, so they execute on a <a href="https://globalping.io">Globalping</a> probe
+     &mdash; which is also what lets DNS query any resolver you pick. Ping and traceroute results
+     export to CSV.</p>
 </header>
 
 <div class="grid">
@@ -218,24 +220,36 @@
   <!-- ==================== DNS ==================== -->
   <section class="card" id="dns">
     <h2>DNS lookup <span class="dot" id="dns-dot"></span></h2>
-    <div class="sub">Resolved over DNS-over-HTTPS from your browser.</div>
+    <div class="sub">Runs from a Globalping probe so the resolver is your pick. SPF and DMARC are
+      TXT lookups; enter an IP (or hit PTR) for a reverse lookup.</div>
 
     <div class="row">
-      <label class="fld grow">name
-        <input class="host" id="dns-name" type="text" placeholder="e.g. example.com" spellcheck="false" autocomplete="off">
+      <label class="fld grow">name / ip
+        <input class="host" id="dns-name" type="text" placeholder="example.com  ·  or an IP to reverse" spellcheck="false" autocomplete="off">
       </label>
       <label class="fld">type
         <select id="dns-type">
-          <option>A</option><option>AAAA</option><option>CNAME</option><option>MX</option>
-          <option>TXT</option><option>NS</option><option>SOA</option><option>CAA</option>
-          <option>PTR</option><option>SRV</option>
+          <option>A</option><option>AAAA</option><option>CNAME</option><option>NS</option>
+          <option>MX</option><option>TXT</option><option>SPF</option><option>DMARC</option>
+          <option>SOA</option><option>SRV</option><option>PTR</option>
         </select>
       </label>
+    </div>
+    <div class="row">
       <label class="fld">resolver
         <select id="dns-resolver">
-          <option value="cloudflare">Cloudflare</option>
-          <option value="google">Google</option>
+          <option value="default">Default</option>
+          <option value="1.1.1.1">Cloudflare</option>
+          <option value="8.8.8.8">Google</option>
+          <option value="75.75.75.75">Comcast</option>
+          <option value="custom">Custom</option>
         </select>
+      </label>
+      <label class="fld" id="dns-custom-wrap" hidden>resolver ip / host
+        <input class="from" id="dns-resolver-custom" type="text" placeholder="9.9.9.9" spellcheck="false" autocomplete="off">
+      </label>
+      <label class="fld">probe
+        <input class="from" id="dns-from" type="text" value="US" placeholder="US, New York&hellip;" spellcheck="false" autocomplete="off">
       </label>
     </div>
     <div class="row">
@@ -626,54 +640,119 @@
   $("#trace-target").addEventListener("keydown", e => { if (e.key === "Enter") runTrace(); });
 
   // =====================================================================
-  //  DNS  -- DNS-over-HTTPS, straight from the browser
+  //  DNS  -- resolved on a Globalping probe, resolver of your choice
   // =====================================================================
-  const TYPE_BY_NUM = { 1:"A", 2:"NS", 5:"CNAME", 6:"SOA", 12:"PTR", 15:"MX", 16:"TXT", 28:"AAAA", 33:"SRV", 257:"CAA" };
-  const RCODE = { 0:"NOERROR", 1:"FORMERR", 2:"SERVFAIL", 3:"NXDOMAIN", 5:"REFUSED" };
   const dnsOut = $("#dns-out");
+  const DNS_VIRTUAL = { SPF: "TXT", DMARC: "TXT" };   // convenience "types" -> real query
+  // resolvers that only answer from their own network -> pin the probe there
+  const RESOLVER_NET = { "75.75.75.75": "Comcast" };
+
+  const isIPv4 = s => /^(\d{1,3}\.){3}\d{1,3}$/.test(s) && s.split(".").every(o => +o <= 255);
+  const isIPv6 = s => s.includes(":") && /^[0-9a-f:]+$/i.test(s) && (s.match(/:/g) || []).length >= 2;
+  const isIP = s => isIPv4(s) || isIPv6(s);
+
+  // ".4.3.2.1.in-addr.arpa" / "...ip6.arpa"  ->  bare IP, or null
+  function arpaToIP(s) {
+    s = s.replace(/\.$/, "").toLowerCase();
+    let m = s.match(/^(.+)\.in-addr\.arpa$/);
+    if (m) return m[1].split(".").reverse().join(".");
+    m = s.match(/^(.+)\.ip6\.arpa$/);
+    if (m) {
+      const nib = m[1].split(".").reverse();
+      let out = "";
+      for (let i = 0; i < nib.length; i++) out += nib[i] + (i % 4 === 3 && i !== nib.length - 1 ? ":" : "");
+      return out;
+    }
+    return null;
+  }
+
+  $("#dns-resolver").addEventListener("change", e => {
+    $("#dns-custom-wrap").hidden = e.target.value !== "custom";
+  });
 
   async function runDns() {
-    const name = $("#dns-name").value.trim().replace(/^https?:\/\//i, "").replace(/\/.*$/, "");
-    if (!name) return;
-    const type = $("#dns-type").value;
-    const google = $("#dns-resolver").value === "google";
-    const url = (google
-      ? "https://dns.google/resolve?name=" + encodeURIComponent(name) + "&type=" + type
-      : "https://cloudflare-dns.com/dns-query?name=" + encodeURIComponent(name) + "&type=" + type);
+    const rawIn = $("#dns-name").value.trim();
+    if (!rawIn) return;
+    let uiType = $("#dns-type").value;
+    let qType = DNS_VIRTUAL[uiType] || uiType;
+
+    let host = rawIn.replace(/^[a-z]+:\/\//i, "").replace(/\/.*$/, "").replace(/\.$/, "");
+    let target = host;
+
+    // ---- reverse lookup: PTR type, an .arpa name, or a bare IP all mean PTR ----
+    const fromArpa = arpaToIP(host);
+    if (uiType === "PTR" || fromArpa || isIP(host)) {
+      qType = "PTR";
+      target = fromArpa || host;
+      if (!isIP(target)) {
+        showDns('<div class="meta err">PTR needs an IP address, or a .in-addr.arpa / .ip6.arpa name.</div>');
+        return;
+      }
+      uiType = "PTR";
+      $("#dns-type").value = "PTR";
+    } else if (uiType === "DMARC") {
+      target = "_dmarc." + host.replace(/^_dmarc\./i, "");
+    }
+
+    const sel = $("#dns-resolver").value;
+    const resolver = sel === "default" ? ""
+      : sel === "custom" ? $("#dns-resolver-custom").value.trim()
+      : sel;
+    const magic = RESOLVER_NET[sel] || $("#dns-from").value.trim() || "US";
 
     $("#dns-run").disabled = true;
     $("#dns-dot").classList.add("busy");
-    dnsOut.innerHTML = '<div class="meta">querying ' + (google ? "Google" : "Cloudflare") + " …</div>";
-    const t0 = performance.now();
+    showDns('<div class="meta">querying ' + esc(qType) + " " + esc(target) + " @ " +
+            esc(resolver || "default resolver") + " from " + esc(magic) + " &hellip;</div>");
     try {
-      const r = await fetch(url, { headers: { accept: "application/dns-json" } });
-      const j = await r.json();
-      renderDns(j, google ? "Google · 8.8.8.8" : "Cloudflare · 1.1.1.1",
-                (performance.now() - t0).toFixed(0), type);
+      const opts = { query: { type: qType } };
+      if (resolver) opts.resolver = resolver;
+      const res = await globalping("dns", target, opts, magic);
+      renderDns(res, uiType, target);
     } catch (e) {
-      dnsOut.innerHTML = '<div class="meta err">Error: ' + esc(e.message) + "</div>";
+      showDns('<div class="meta err">Error: ' + esc(e.message) + "</div>");
     } finally {
       $("#dns-run").disabled = false;
       $("#dns-dot").classList.remove("busy");
     }
   }
 
-  function renderDns(j, resolver, ms, qtype) {
-    const ans = j.Answer || [];
-    let html = '<div class="meta">' + esc(resolver) + "  ·  " +
-               (RCODE[j.Status] || ("status " + j.Status)) + "  ·  " + ms + " ms  ·  " +
-               ans.length + " answer" + (ans.length === 1 ? "" : "s") + "</div>";
-    if (ans.length) {
-      html += '<table class="tbl"><thead><tr><th>name</th><th>type</th><th>ttl</th><th>data</th></tr></thead><tbody>';
-      ans.forEach(a => {
-        html += "<tr><td>" + esc(a.name) + "</td><td>" + esc(TYPE_BY_NUM[a.type] || a.type) +
-                "</td><td>" + a.TTL + "</td><td>" + esc(a.data) + "</td></tr>";
-      });
-      html += "</tbody></table>";
+  const showDns = h => { dnsOut.innerHTML = h; };
+  const unquote = v => String(v).replace(/^"|"$/g, "");
+
+  function dnsTable(ans) {
+    let h = '<table class="tbl"><thead><tr><th>name</th><th>type</th><th>ttl</th><th>data</th></tr></thead><tbody>';
+    ans.forEach(a => {
+      h += "<tr><td>" + esc(a.name) + "</td><td>" + esc(a.type) + "</td><td>" +
+           esc(a.ttl) + "</td><td>" + esc(unquote(a.value)) + "</td></tr>";
+    });
+    return h + "</tbody></table>";
+  }
+
+  function renderDns(res, uiType, target) {
+    const ans = res.answers || [];
+    const probe = probeLabel(res._probe, "");
+    const status = res.statusCodeName || ("status " + res.statusCode);
+    const ms = (res.timings && res.timings.total != null) ? "  ·  " + res.timings.total + " ms" : "";
+    let html = '<div class="meta">' +
+      (res.resolver ? "resolver " + esc(res.resolver) : "default resolver") +
+      "  ·  " + esc(status) + ms +
+      "  ·  " + ans.length + " answer" + (ans.length === 1 ? "" : "s") +
+      (probe ? "  ·  via " + esc(probe) : "") + "</div>";
+
+    if (uiType === "SPF" || uiType === "DMARC") {
+      const tag = uiType === "SPF" ? /v=spf1/i : /v=DMARC1/i;
+      const hits = ans.filter(a => tag.test(unquote(a.value)));
+      html += hits.length
+        ? hits.map(a => '<pre class="raw">' + esc(unquote(a.value)) + "</pre>").join("")
+        : '<div class="meta err">no ' + uiType + " record at " + esc(target) + "</div>";
+      if (ans.length) html += dnsTable(ans);
+    } else if (ans.length) {
+      html += dnsTable(ans);
     } else {
-      html += '<div class="meta">no ' + esc(qtype) + " records</div>";
+      html += '<div class="meta">no ' + esc(uiType) + " records</div>";
     }
-    dnsOut.innerHTML = html;
+    showDns(html);
   }
 
   $("#dns-run").addEventListener("click", runDns);
