@@ -227,8 +227,8 @@
   <section class="card" id="bw">
     <h2>Bandwidth <span class="dot" id="bw-dot"></span></h2>
     <div class="sub">Down/up throughput to the nearest Cloudflare edge, sustained ~20&nbsp;s each way
-      so the number is representative, not a burst. Live scrolling bar trace (download up from the
-      centre, upload mirrored below). Fast links stop at ~1.6&nbsp;GB each way &mdash; mind mobile
+      so the number is representative, not a burst. Live scrolling bar trace (download down from the
+      centre, upload mirrored above). Fast links stop at ~1.6&nbsp;GB each way &mdash; mind mobile
       data. Every run is logged.</div>
     <div class="row">
       <button class="btn go" id="bw-run">Run test</button>
@@ -1006,8 +1006,8 @@
   }
   const median = a => { if (!a.length) return NaN; const s = a.slice().sort((x, y) => x - y); return s[s.length >> 1]; };
 
-  // newest sample at the right edge, scrolling left. Download grows up from the
-  // centre, upload grows down at the same slot (mirrored by index).
+  // newest sample at the right edge, scrolling left. Download grows down from the
+  // centre, upload grows up at the same slot (mirrored by index).
   const BW_WIN = 120;
   function bwDraw() {
     const dpr = window.devicePixelRatio || 1;
@@ -1051,8 +1051,8 @@
         bwx.fillRect(x, dir < 0 ? midY - bh : midY, bw, bh);
       }
     };
-    if (down.length) series(down, "#7dcfff", -1);
-    if (up.length) series(up, "#ff6ad5", 1);
+    if (down.length) series(down, "#7dcfff", 1);
+    if (up.length) series(up, "#ff6ad5", -1);
   }
 
   function bwRenderOut() {

@@ -52,8 +52,8 @@ These run entirely from the browser:
   `speed.cloudflare.com`, run **sustained ~20 s each way** so the headline
   number is a representative rate, not a slow-start burst (the mean of samples
   past a 3 s warm-up). **Scrolling bar trace**: newest 250 ms sample at the
-  right edge, scrolling left; download grows up from the centre line (cyan),
-  upload grows down at the same slots (magenta), mirrored. **Bufferbloat** grade
+  right edge, scrolling left; download grows down from the centre line (cyan),
+  upload grows up at the same slots (magenta), mirrored. **Bufferbloat** grade
   = loaded median RTT − idle median (measured, not drawn). Fast links stop at
   ~1.6 GB each way. Every run is appended to a **log** in `localStorage` - last 8
   in a table, **Share log** exports CSV (`iso_time, down_mbps, up_mbps,
