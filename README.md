@@ -49,10 +49,10 @@ These run entirely from the browser:
   `Date` header. ASN/city need a hosted origin; from a local file you still get
   IP / edge / HTTP / TLS / IPv6 from `cdn-cgi/trace`.
 - **Bandwidth** - 4 parallel streamed down + 3 looping XHR up streams to
-  `speed.cloudflare.com`, run **sustained** (~20 s down / ~12 s up) so the
-  headline number is a representative rate, not a slow-start burst (the mean of
-  samples past a 3 s warm-up). **btop-style bar trace**: newest 250 ms sample at
-  the right edge, scrolling left; download grows up from the centre line (cyan),
+  `speed.cloudflare.com`, run **sustained ~20 s each way** so the headline
+  number is a representative rate, not a slow-start burst (the mean of samples
+  past a 3 s warm-up). **Scrolling bar trace**: newest 250 ms sample at the
+  right edge, scrolling left; download grows up from the centre line (cyan),
   upload grows down at the same slots (magenta), mirrored. **Bufferbloat** grade
   = loaded median RTT − idle median (measured, not drawn). Fast links stop at
   ~1.6 GB each way. Every run is appended to a **log** in `localStorage` - last 8

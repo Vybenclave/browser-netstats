@@ -48,7 +48,9 @@
   details.desc summary::-webkit-details-marker{display:none}
   details.desc summary::before{content:"\25B8  ";color:var(--muted)}
   details.desc[open] summary::before{content:"\25BE  "}
-  details.desc dl{margin:8px 0 0;font-size:12px;line-height:1.5}
+  details.desc .dgrp{margin:12px 0 2px;font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--dim)}
+  details.desc .dgrp:first-of-type{margin-top:8px}
+  details.desc dl{margin:0;font-size:12px;line-height:1.5}
   details.desc dt{color:var(--fg-dim);margin-top:6px}
   details.desc dd{margin:1px 0 0;color:var(--muted)}
   .netbar{margin-top:12px;display:inline-flex;align-items:center;gap:8px;font-size:12px;
@@ -185,15 +187,22 @@
      rest are measured from here.</p>
   <details class="desc">
     <summary>description</summary>
+    <p class="dgrp">Local result &mdash; measured from this browser</p>
     <dl>
-      <dt>Connection</dt><dd>Public IP, ASN, the Cloudflare edge you land on, IPv6 reachability, HTTP/TLS version, clock offset &mdash; read straight from here.</dd>
-      <dt>NAT type</dt><dd>Public IP, whether outbound UDP works, and cone vs symmetric NAT, via WebRTC + public STUN.</dd>
-      <dt>Bandwidth</dt><dd>Sustained down/up to Cloudflare (~20&nbsp;s / ~12&nbsp;s) with a btop-style bar trace, bufferbloat grade, and a per-run log.</dd>
-      <dt>Latency matrix</dt><dd>HTTPS round-trip from here to ~10 public anycast endpoints (Cloudflare, Google, AWS, &hellip;), ranked fastest first.</dd>
+      <dt>Connection</dt><dd>Public IP, ASN, the Cloudflare edge you land on, IPv6 reachability, HTTP/TLS version, clock offset.</dd>
+      <dt>Bandwidth</dt><dd>Sustained ~20&nbsp;s each-way down/up to Cloudflare with a scrolling bar trace, bufferbloat grade, and a per-run log.</dd>
       <dt>Ping</dt><dd>HTTPS round-trip to a chosen host every 500&nbsp;ms, with a rolling graph, jitter and packet-loss.</dd>
-      <dt>DNS lookup</dt><dd>Any record type (incl. SPF / DMARC / reverse) from a resolver you pick &mdash; Cloudflare, Google, Comcast or custom &mdash; on a Globalping probe.</dd>
-      <dt>Traceroute</dt><dd>Hop-by-hop path to a target from a Globalping probe; ICMP / TCP / UDP, pick the probe location.</dd>
-      <dt>Web probe</dt><dd>HTTP status + Server/redirect headers per port, or a live/offline sweep of a small IP range, via Globalping.</dd>
+      <dt>NAT type</dt><dd>Public IP, whether outbound UDP works, and cone vs symmetric NAT, via WebRTC + public STUN.</dd>
+      <dt>Latency matrix</dt><dd>HTTPS round-trip from here to ~10 public anycast endpoints (Cloudflare, Google, AWS, &hellip;), ranked fastest first.</dd>
+    </dl>
+    <p class="dgrp">Globalping probe &mdash; a browser can't do these</p>
+    <dl>
+      <dt>DNS lookup</dt><dd>Any record type (incl. SPF / DMARC / reverse) from a resolver you pick &mdash; Cloudflare, Google, Comcast or custom.</dd>
+      <dt>Traceroute</dt><dd>Hop-by-hop path to a target; ICMP / TCP / UDP, pick the probe location.</dd>
+      <dt>Web probe</dt><dd>HTTP status + Server/redirect headers per port, or a live/offline sweep of a small IP range.</dd>
+    </dl>
+    <p class="dgrp">Certificate</p>
+    <dl>
       <dt>TLS certificate</dt><dd>Decode a cert file in the page (no validation, works offline), or fetch a live host's cert via a Globalping probe.</dd>
     </dl>
   </details>
@@ -217,10 +226,10 @@
   <!-- ==================== BANDWIDTH ==================== -->
   <section class="card" id="bw">
     <h2>Bandwidth <span class="dot" id="bw-dot"></span></h2>
-    <div class="sub">Down/up throughput to the nearest Cloudflare edge, sustained ~20&nbsp;s down /
-      ~12&nbsp;s up so the number is representative, not a burst. Live btop-style bar trace (down
-      up from the centre, up mirrored below). Fast links stop at ~1.6&nbsp;GB each way &mdash; mind
-      mobile data. Every run is logged.</div>
+    <div class="sub">Down/up throughput to the nearest Cloudflare edge, sustained ~20&nbsp;s each way
+      so the number is representative, not a burst. Live scrolling bar trace (download up from the
+      centre, upload mirrored below). Fast links stop at ~1.6&nbsp;GB each way &mdash; mind mobile
+      data. Every run is logged.</div>
     <div class="row">
       <button class="btn go" id="bw-run">Run test</button>
       <button class="btn" id="bw-clear">Clear log</button>
@@ -972,7 +981,7 @@
   // ---- bandwidth: live bar trace + run log ----
   const BW = {
     streams: 4, upStreams: 3,
-    downMs: 20000, upMs: 12000,        // sustained, not a burst
+    downMs: 20000, upMs: 20000,        // sustained, not a burst
     downCap: 1600e6, upCap: 1600e6,    // hard data ceilings (fast links stop early)
     upBlob: 8e6, latMs: 300, sampleMs: 250, warmup: 3,
   };
@@ -997,8 +1006,8 @@
   }
   const median = a => { if (!a.length) return NaN; const s = a.slice().sort((x, y) => x - y); return s[s.length >> 1]; };
 
-  // btop-style: newest sample at the right edge, scrolling left. Download grows
-  // up from the centre, upload grows down at the same slot (mirrored by index).
+  // newest sample at the right edge, scrolling left. Download grows up from the
+  // centre, upload grows down at the same slot (mirrored by index).
   const BW_WIN = 120;
   function bwDraw() {
     const dpr = window.devicePixelRatio || 1;
