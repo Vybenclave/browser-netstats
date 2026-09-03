@@ -151,6 +151,14 @@
   .kv td:first-child{color:var(--dim);white-space:nowrap;width:104px}
   .kv td:last-child{color:var(--fg-dim);word-break:break-all}
 
+  .sharemenu{position:absolute;z-index:60;background:var(--panel-2);border:1px solid var(--border);
+             border-radius:8px;padding:4px;display:flex;flex-direction:column;min-width:132px;
+             box-shadow:0 8px 24px rgba(0,0,0,.45)}
+  .sharemenu button{font:inherit;font-size:12px;text-align:left;background:none;border:0;color:var(--fg-dim);
+                    padding:6px 10px;border-radius:6px;cursor:pointer}
+  .sharemenu button:hover{background:rgba(125,207,255,.13);color:var(--fg)}
+  .shbar{margin-top:12px}
+
   footer{padding:0 24px 22px;font-size:11px;color:var(--muted)}
   footer a{color:var(--blue)}
 </style>
@@ -207,7 +215,6 @@
     <div class="row">
       <button class="btn go" id="ping-toggle">Start</button>
       <button class="btn" id="ping-clear">Clear</button>
-      <button class="btn" id="ping-csv" disabled>Export CSV (60&nbsp;s)</button>
     </div>
 
     <div class="stats">
@@ -229,6 +236,8 @@
       </div>
       <canvas id="c"></canvas>
     </div>
+
+    <div class="shbar"><button class="btn" id="ping-share" disabled>Share result</button></div>
   </section>
 
   <!-- ==================== TRACEROUTE ==================== -->
@@ -258,9 +267,9 @@
     </div>
     <div class="row">
       <button class="btn go" id="trace-run">Run</button>
-      <button class="btn" id="trace-csv" disabled>Export CSV</button>
     </div>
 
+    <div class="shbar"><button class="btn" id="trace-share" disabled>Share result</button></div>
     <div class="out" id="trace-out"><div class="meta">no trace yet.</div></div>
   </section>
 
@@ -304,6 +313,7 @@
       <button class="btn go" id="dns-run">Lookup</button>
     </div>
 
+    <div class="shbar"><button class="btn" id="dns-share" disabled>Share result</button></div>
     <div class="out" id="dns-out"><div class="meta">no query yet.</div></div>
   </section>
 
@@ -353,6 +363,7 @@
       </div>
     </div>
 
+    <div class="shbar"><button class="btn" id="web-share" disabled>Share result</button></div>
     <div class="out" id="web-out"><div class="meta">no probe yet.</div></div>
   </section>
 
@@ -403,6 +414,7 @@
       </div>
     </div>
 
+    <div class="shbar"><button class="btn" id="tls-share" disabled>Share result</button></div>
     <div class="out" id="tls-out"><div class="meta">load or paste a certificate file.</div></div>
   </section>
 
@@ -423,19 +435,74 @@
   const slug = s => String(s).replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "host";
   const stamp = () => new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
 
-  function downloadCSV(name, rows) {
+  // ---------- share / save ----------
+  function csvString(rows) {
     const cell = v => {
       v = v === null || v === undefined ? "" : String(v);
       return /[",\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
     };
-    const csv = rows.map(r => r.map(cell).join(",")).join("\r\n");
+    return rows.map(r => r.map(cell).join(",")).join("\r\n");
+  }
+  function saveBlob(name, text, type) {
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    a.href = URL.createObjectURL(new Blob([text], { type }));
     a.download = name;
     document.body.appendChild(a);
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+  function flash(btn, msg) {
+    if (btn._t) return;
+    const old = btn.textContent;
+    btn.textContent = msg;
+    btn._t = setTimeout(() => { btn.textContent = old; btn._t = null; }, 1100);
+  }
+
+  const shareMenu = document.createElement("div");
+  shareMenu.className = "sharemenu";
+  shareMenu.hidden = true;
+  document.body.appendChild(shareMenu);
+  document.addEventListener("click", e => {
+    if (!shareMenu.hidden && !shareMenu.contains(e.target) && e.target !== shareMenu._btn) shareMenu.hidden = true;
+  });
+  addEventListener("resize", () => { shareMenu.hidden = true; });
+
+  // build() -> { base, title, txt, csv? }  (or null when there's nothing yet)
+  function makeShare(sel, build) {
+    const btn = $(sel);
+    btn.addEventListener("click", () => {
+      if (!shareMenu.hidden && shareMenu._btn === btn) { shareMenu.hidden = true; return; }
+      const r = build();
+      if (!r || !r.txt) { flash(btn, "nothing yet"); return; }
+      const base = (r.base || "report").replace(/[^\w.-]+/g, "-");
+      const txtFile = () => new File([r.txt], base + ".txt", { type: "text/plain" });
+      const csvFile = r.csv ? () => new File([r.csv], base + ".csv", { type: "text/csv" }) : null;
+      const shareFile = csvFile || txtFile;
+      const items = [];
+      if (navigator.canShare && navigator.canShare({ files: [shareFile()] })) {
+        items.push(["Share…", () => navigator.share({ files: [shareFile()], title: r.title || base }).catch(() => {})]);
+      } else if (navigator.share) {
+        items.push(["Share…", () => navigator.share({ title: r.title || base, text: r.txt }).catch(() => {})]);
+      }
+      items.push(["Save .txt", () => saveBlob(base + ".txt", r.txt, "text/plain")]);
+      if (r.csv) items.push(["Save .csv", () => saveBlob(base + ".csv", r.csv, "text/csv")]);
+      items.push(["Copy text", () => navigator.clipboard.writeText(r.txt)
+        .then(() => flash(btn, "copied")).catch(() => flash(btn, "copy failed"))]);
+
+      shareMenu.innerHTML = "";
+      items.forEach(([label, fn]) => {
+        const b = document.createElement("button");
+        b.textContent = label;
+        b.addEventListener("click", () => { shareMenu.hidden = true; fn(); });
+        shareMenu.appendChild(b);
+      });
+      const rc = btn.getBoundingClientRect();
+      shareMenu.style.left = Math.round(scrollX + rc.left) + "px";
+      shareMenu.style.top = Math.round(scrollY + rc.bottom + 4) + "px";
+      shareMenu._btn = btn;
+      shareMenu.hidden = false;
+    });
   }
 
   // =====================================================================
@@ -488,7 +555,7 @@
     total = lost = sum = okCount = 0;
     min = Infinity; max = 0;
     lastRtt = prevRtt = null; jitter = 0;
-    $("#ping-csv").disabled = true;
+    $("#ping-share").disabled = true;
     updateStats(); render();
   }
 
@@ -529,7 +596,7 @@
     }
     if (samples.length > MAXBARS) samples.shift();
     while (csvLog.length && now - csvLog[0].t > CSV_WINDOW) csvLog.shift();
-    $("#ping-csv").disabled = csvLog.length === 0;
+    $("#ping-share").disabled = csvLog.length === 0;
     updateStats(); render();
   }
 
@@ -648,22 +715,31 @@
     ctx.globalAlpha = 1;
   }
 
-  function exportPingCSV() {
-    if (!csvLog.length) return;
-    const rows = [["unix_ms", "iso_time", "target", "rtt_ms", "status"]];
-    for (const s of csvLog) {
-      rows.push([
-        s.t, new Date(s.t).toISOString(), current.host,
-        s.rtt === null ? "" : s.rtt.toFixed(2),
-        s.rtt === null ? "lost" : "ok",
-      ]);
-    }
-    downloadCSV("ping_" + slug(current.host) + "_" + stamp() + ".csv", rows);
+  function pingReport() {
+    if (!csvLog.length) return null;
+    const csv = csvString([
+      ["unix_ms", "iso_time", "target", "rtt_ms", "status"],
+      ...csvLog.map(s => [s.t, new Date(s.t).toISOString(), current.host,
+        s.rtt === null ? "" : s.rtt.toFixed(2), s.rtt === null ? "lost" : "ok"]),
+    ]);
+    const txt = [
+      "Browser Network Toolkit — Ping",
+      "target   : " + current.label + "  (" + current.host + ")",
+      "window   : last " + Math.round(CSV_WINDOW / 1000) + " s, one every " + INTERVAL + " ms",
+      "captured : " + new Date().toISOString(),
+      "total " + total + "   lost " + lost + "   loss " + (total ? (lost / total * 100).toFixed(1) : "0.0") + "%",
+      "rtt ms: min " + fmtN(min) + "   avg " + fmtN(okCount ? sum / okCount : NaN) +
+        "   max " + fmtN(max) + "   jitter " + fmtN(jitter),
+      "",
+      ...csvLog.map(s => new Date(s.t).toISOString() + "   " +
+        (s.rtt === null ? "  lost" : (s.rtt.toFixed(1) + " ms").padStart(10))),
+    ].join("\n");
+    return { base: "ping_" + slug(current.host) + "_" + stamp(), title: "Ping — " + current.label, txt, csv };
   }
 
   $("#ping-toggle").addEventListener("click", () => running ? stop() : start());
   $("#ping-clear").addEventListener("click", resetStats);
-  $("#ping-csv").addEventListener("click", exportPingCSV);
+  makeShare("#ping-share", pingReport);
   $("#ping-use").addEventListener("click", useCustom);
   $("#ping-custom").addEventListener("keydown", e => { if (e.key === "Enter") useCustom(); });
   window.addEventListener("resize", render);
@@ -734,10 +810,10 @@
         raw: res.rawOutput || "",
       };
       renderTrace(lastTrace);
-      $("#trace-csv").disabled = lastTrace.hops.length === 0;
+      $("#trace-share").disabled = lastTrace.hops.length === 0 && !lastTrace.raw;
     } catch (e) {
       traceOut.innerHTML = '<div class="meta err">Error: ' + esc(e.message) + "</div>";
-      $("#trace-csv").disabled = true;
+      $("#trace-share").disabled = true;
     } finally {
       setTraceBusy(false);
     }
@@ -766,25 +842,30 @@
     traceOut.innerHTML = html;
   }
 
-  function exportTraceCSV() {
-    if (!lastTrace) return;
-    const rows = [["hop", "hostname", "ip", "rtt1_ms", "rtt2_ms", "rtt3_ms"]];
-    lastTrace.hops.forEach((h, i) => {
-      const r = (h.timings || []).map(x => x.rtt);
-      rows.push([
-        i + 1,
-        h.resolvedHostname || "",
-        h.resolvedAddress || "",
-        r[0] === undefined ? "" : r[0],
-        r[1] === undefined ? "" : r[1],
-        r[2] === undefined ? "" : r[2],
-      ]);
-    });
-    downloadCSV("traceroute_" + slug(lastTrace.target) + "_" + stamp() + ".csv", rows);
+  function traceReport() {
+    if (!lastTrace) return null;
+    const csv = csvString([
+      ["hop", "hostname", "ip", "rtt1_ms", "rtt2_ms", "rtt3_ms"],
+      ...lastTrace.hops.map((h, i) => {
+        const r = (h.timings || []).map(x => x.rtt);
+        return [i + 1, h.resolvedHostname || "", h.resolvedAddress || "",
+          r[0] ?? "", r[1] ?? "", r[2] ?? ""];
+      }),
+    ]);
+    const txt = [
+      "Browser Network Toolkit — Traceroute",
+      "target : " + lastTrace.target,
+      "probe  : " + probeLabel(lastTrace.probe, lastTrace.from),
+      "when   : " + new Date().toISOString(),
+      "",
+      lastTrace.raw || "(no raw output)",
+    ].join("\n");
+    return { base: "traceroute_" + slug(lastTrace.target) + "_" + stamp(),
+      title: "Traceroute — " + lastTrace.target, txt, csv };
   }
 
   $("#trace-run").addEventListener("click", runTrace);
-  $("#trace-csv").addEventListener("click", exportTraceCSV);
+  makeShare("#trace-share", traceReport);
   $("#trace-target").addEventListener("keydown", e => { if (e.key === "Enter") runTrace(); });
 
   // =====================================================================
@@ -878,7 +959,11 @@
     return h + "</tbody></table>";
   }
 
+  let lastDns = null;
+
   function renderDns(res, uiType, target) {
+    lastDns = { res, uiType, target };
+    $("#dns-share").disabled = false;
     const ans = res.answers || [];
     const probe = probeLabel(res._probe, "");
     const status = res.statusCodeName || ("status " + res.statusCode);
@@ -904,7 +989,29 @@
     showDns(html);
   }
 
+  function dnsReport() {
+    if (!lastDns) return null;
+    const { res, uiType, target } = lastDns;
+    const ans = res.answers || [];
+    const csv = csvString([["name", "type", "ttl", "data"],
+      ...ans.map(a => [a.name, a.type, a.ttl, unquote(a.value)])]);
+    const txt = [
+      "Browser Network Toolkit — DNS",
+      "query    : " + uiType + " " + target,
+      "resolver : " + (res.resolver || "default"),
+      "status   : " + (res.statusCodeName || res.statusCode) +
+        (res.timings && res.timings.total != null ? "   " + res.timings.total + " ms" : ""),
+      "when     : " + new Date().toISOString(),
+      "",
+      ...(ans.length ? ans.map(a => a.name + "  " + a.type + "  " + a.ttl + "  " + unquote(a.value))
+        : ["(no records)"]),
+    ].join("\n");
+    return { base: "dns_" + slug(target) + "_" + uiType + "_" + stamp(),
+      title: "DNS " + uiType + " — " + target, txt, csv };
+  }
+
   $("#dns-run").addEventListener("click", runDns);
+  makeShare("#dns-share", dnsReport);
   $("#dns-name").addEventListener("keydown", e => { if (e.key === "Enter") runDns(); });
 
   // =====================================================================
@@ -1037,6 +1144,8 @@
       }
       webOut.innerHTML = renderWeb(target, proto, rows, rows.length < ports.length);
     }
+    lastWeb = { mode: "check", target, proto, rows };
+    $("#web-share").disabled = false;
     setBusy("#web-run", "#web-dot", false);
   }
 
@@ -1087,10 +1196,59 @@
       webOut.innerHTML = sweepGrid(ips, ports, grid, i + 1, aborted);
     }
     webOut.innerHTML = sweepGrid(ips, ports, grid, ips.length, aborted);
+    lastWeb = { mode: "sweep", spec: $("#web-range").value.trim(), ports, grid, done: ips.length };
+    $("#web-share").disabled = false;
     setBusy("#web-sweep-run", "#web-dot", false);
   }
 
+  let lastWeb = null;
+
+  function webReport() {
+    if (!lastWeb) return null;
+    if (lastWeb.mode === "check") {
+      const { target, proto, rows } = lastWeb;
+      const csv = csvString([
+        ["port", "state", "http_status", "tls", "cert_cn", "expires", "server", "location"],
+        ...rows.map(r => {
+          const t = r.res && r.res.tls;
+          const h = (r.res && r.res.headers) || {};
+          return [r.port, webState(r.res, r.err).label, (r.res && r.res.statusCode) || "",
+            t ? t.protocol : "", t && t.subject ? t.subject.CN : "",
+            t ? String(t.expiresAt).slice(0, 10) : "", h.server || "", h.location || ""];
+        }),
+      ]);
+      const txt = [
+        "Browser Network Toolkit — Web probe",
+        "target : " + proto + "  " + target,
+        "when   : " + new Date().toISOString(),
+        "",
+        ...rows.map(r => {
+          const t = r.res && r.res.tls;
+          return ":" + r.port + "   " + webState(r.res, r.err).label +
+            (t ? "   " + t.protocol + " " + ((t.subject && t.subject.CN) || "") : "") +
+            (r.err ? "   " + r.err : "");
+        }),
+      ].join("\n");
+      return { base: "webprobe_" + slug(target) + "_" + stamp(), title: "Web probe — " + target, txt, csv };
+    }
+    const { spec, ports, grid, done } = lastWeb;
+    const head = ["address", ...ports.map(p => ":" + p), "state"];
+    const csv = csvString([head, ...grid.slice(0, done).map(g =>
+      [g.ip, ...g.cells.map(c => c || "down"), g.live ? "live" : "offline"])]);
+    const txt = [
+      "Browser Network Toolkit — Web probe (range sweep)",
+      "range : " + spec,
+      "when  : " + new Date().toISOString(),
+      "",
+      head.join("\t"),
+      ...grid.slice(0, done).map(g =>
+        [g.ip, ...g.cells.map(c => c || "-"), g.live ? "live" : "offline"].join("\t")),
+    ].join("\n");
+    return { base: "websweep_" + slug(spec) + "_" + stamp(), title: "Web sweep — " + spec, txt, csv };
+  }
+
   $("#web-run").addEventListener("click", webCheck);
+  makeShare("#web-share", webReport);
   $("#web-target").addEventListener("keydown", e => { if (e.key === "Enter") webCheck(); });
   $("#web-sweep-run").addEventListener("click", webSweep);
   $("#web-sweep-toggle").addEventListener("click", () => {
@@ -1345,6 +1503,8 @@
       const ders = toDerList(src);
       const certs = [];
       for (const d of ders) certs.push(await parseCert(d));
+      lastCerts = { certs, src: f ? "local file " + f.name : "pasted PEM" };
+      $("#tls-share").disabled = false;
       tlsOut.innerHTML = '<div class="meta">parsed in the browser  ·  ' + certs.length + " cert" +
         (certs.length === 1 ? "" : "s") + "  ·  no validation performed</div>" +
         certs.map((c, i) => certBlock(c, i, certs.length)).join("");
@@ -1405,10 +1565,13 @@
           esc((res.rawOutput || "").split("\n")[0] || "no handshake") + ")</div>";
         return;
       }
+      const c = gpToCert(res.tls);
+      lastCerts = { certs: [c], src: "live fetch " + host + ":" + port };
+      $("#tls-share").disabled = false;
       tlsOut.innerHTML = '<div class="meta">live fetch  ·  ' + esc(host) + ":" + port +
         (res._probe ? "  ·  via " + esc(probeLabel(res._probe, "")) : "") +
         "  ·  no validation  ·  SHA-1 / SPKI pin are Local-mode only</div>" +
-        certBlock(gpToCert(res.tls), 0, 1);
+        certBlock(c, 0, 1);
     } catch (e) {
       tlsOut.innerHTML = '<div class="meta err">Error: ' + esc(e.message) + "</div>";
     } finally {
@@ -1416,15 +1579,68 @@
     }
   }
 
+  let lastCerts = null;
+
+  function certLines(c) {
+    const iso = d => { try { return d.toISOString().replace("T", " ").replace(".000Z", " UTC"); } catch (_) { return "?"; } };
+    return [
+      "subject            : " + (c.subject || "-"),
+      c.ext.sans.length ? "SAN                : " + c.ext.sans.join(", ") : null,
+      "issuer             : " + (c.issuer || "-"),
+      "serial             : " + (c.serial || "-"),
+      "not before         : " + iso(c.notBefore),
+      "not after          : " + iso(c.notAfter),
+      "public key         : " + c.key.type + (c.key.curve ? " " + c.key.curve : "") + (c.key.bits ? " " + c.key.bits + "-bit" : ""),
+      c.sigAlg ? "signature          : " + c.sigAlg : null,
+      c.cipher ? "cipher             : " + c.cipher : null,
+      c.proto ? "tls version        : " + c.proto : null,
+      c.authorized != null ? "chain trusted      : " + c.authorized : null,
+      c.ext.ku.length ? "key usage          : " + c.ext.ku.join(", ") : null,
+      c.ext.eku.length ? "ext key usage      : " + c.ext.eku.join(", ") : null,
+      c.ext.ca != null ? "basic constraints  : CA:" + (c.ext.ca ? "TRUE" : "FALSE") : null,
+      c.ext.ski ? "subject key id     : " + c.ext.ski : null,
+      c.ext.aki ? "authority key id   : " + c.ext.aki : null,
+      "SHA-256            : " + (c.sha256 || "-"),
+      c.sha1 ? "SHA-1              : " + c.sha1 : null,
+      c.spkiPin ? "SPKI pin           : sha256/" + c.spkiPin : null,
+    ].filter(Boolean);
+  }
+  const cnOf = c => (String(c.subject).match(/CN=([^,]+)/) || [, ""])[1] || "cert";
+
+  function tlsReport() {
+    if (!lastCerts || !lastCerts.certs.length) return null;
+    const { certs, src } = lastCerts;
+    const txt = [
+      "Browser Network Toolkit — TLS certificate",
+      "source : " + src,
+      "when   : " + new Date().toISOString(),
+      ...certs.flatMap((c, i) => ["",
+        certs.length > 1 ? "--- cert " + (i + 1) + " / " + certs.length + " ---" : "--- certificate ---",
+        ...certLines(c)]),
+    ].join("\n");
+    const isoZ = d => { try { return d.toISOString(); } catch (_) { return ""; } };
+    const csv = csvString([
+      ["subject_cn", "san", "issuer", "serial", "not_before", "not_after", "key", "sig", "sha256", "sha1", "spki_pin"],
+      ...certs.map(c => [cnOf(c), c.ext.sans.join(" "), c.issuer, c.serial,
+        isoZ(c.notBefore), isoZ(c.notAfter), c.key.type + (c.key.bits ? " " + c.key.bits : ""),
+        c.sigAlg || "", c.sha256, c.sha1 || "", c.spkiPin ? "sha256/" + c.spkiPin : ""]),
+    ]);
+    return { base: "cert_" + slug(cnOf(certs[0])) + "_" + stamp(),
+      title: "Certificate — " + cnOf(certs[0]), txt, csv };
+  }
+
   $("#cert-parse").addEventListener("click", parseCertInput);
   $("#cert-clear").addEventListener("click", () => {
     $("#cert-file").value = "";
     $("#cert-paste").value = "";
+    lastCerts = null;
+    $("#tls-share").disabled = true;
     tlsOut.innerHTML = '<div class="meta">load or paste a certificate file.</div>';
   });
   $("#cert-file").addEventListener("change", parseCertInput);
   $("#tls-run").addEventListener("click", tlsFetchPublic);
   $("#tls-host").addEventListener("keydown", e => { if (e.key === "Enter") tlsFetchPublic(); });
+  makeShare("#tls-share", tlsReport);
   (() => {
     const fp = $("#tls-local-pane");
     fp.addEventListener("dragover", e => { e.preventDefault(); fp.classList.add("drag"); });

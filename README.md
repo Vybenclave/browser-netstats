@@ -7,13 +7,26 @@ Tokyo Night theme, cyan/magenta ping graph on a 25% grey grid.
 
 Five tools, laid out as a card grid:
 
-| Tool | Where it runs | Exports |
-| ---- | ------------- | ------- |
-| **Ping** | timed in your browser (HTTPS round-trip) | CSV, last 60 s |
-| **Traceroute** | on a [Globalping](https://globalping.io) probe | CSV of the trace |
-| **DNS lookup** | on a Globalping probe (pick the resolver) | - |
-| **Web probe** | on a Globalping probe | - |
-| **TLS certificate** | local file (default) or a Globalping probe | - |
+| Tool | Where it runs |
+| ---- | ------------- |
+| **Ping** | timed in your browser (HTTPS round-trip) |
+| **Traceroute** | on a [Globalping](https://globalping.io) probe |
+| **DNS lookup** | on a Globalping probe (pick the resolver) |
+| **Web probe** | on a Globalping probe |
+| **TLS certificate** | local file (default) or a Globalping probe |
+
+Every card has a **Share result** button. It opens a small menu:
+
+- **Share…** - only when the browser supports it (phones, some desktops):
+  hands a `.csv` (or `.txt`) file to the OS share sheet, so the result can go
+  to Files, Drive, Messages, Mail, AirDrop, etc.
+- **Save .txt** - a human-readable report.
+- **Save .csv** - the tabular data (ping samples, hops, DNS answers, port
+  grid, cert fields), where it makes sense.
+- **Copy text** - the report to the clipboard.
+
+The button stays usable on the probe-backed cards even after Globalping goes
+offline, so a result you already have can still be shared.
 
 ## Ping
 
@@ -47,8 +60,8 @@ abort or network error is recorded as a lost packet. Values include DNS / TCP
 / TLS setup, so they read higher than a real `ping`, and the first request to
 a host is the slowest.
 
-**Export CSV (60 s)** downloads every ping from the last 60 seconds:
-`unix_ms, iso_time, target, rtt_ms, status` (`status` = `ok` | `lost`).
+**Share result** carries the last 60 seconds: a summary plus a
+`unix_ms, iso_time, target, rtt_ms, status` CSV (`status` = `ok` | `lost`).
 
 ## Traceroute
 
@@ -65,7 +78,8 @@ in the network of your choice and returns the hops. Free and keyless, roughly
 - **protocol** - ICMP (default), TCP, or UDP.
 
 Output is a hop table (`# / host / ip / rtt`) plus the raw probe output.
-**Export CSV** gives `hop, hostname, ip, rtt1_ms, rtt2_ms, rtt3_ms`.
+**Share result** carries the raw traceroute as `.txt` and a
+`hop, hostname, ip, rtt1_ms, rtt2_ms, rtt3_ms` CSV.
 
 ## DNS lookup
 
