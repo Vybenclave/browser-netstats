@@ -1,14 +1,12 @@
 # Browser Network Toolkit
 
-A single-page, no-build kit of network tools that run in the browser. Dark
-Tokyo Night theme, cyan/magenta ping graph on a 25% grey grid.
+A single-page, no-build kit of network tools that run in the browser. Download the file run from your browser.
 
 **Live page:** https://vybenclave.github.io/browser-netstats/
 
 Nine tools in a card grid — one column on mobile, two centered columns on a wide
 screen; each column is an independent vertical stack, so expanding one card only
-pushes the cards under it. A collapsed **description** disclosure in the header
-one-lines every tool.
+pushes the cards under it.
 
 | Tool | Where it runs |
 | ---- | ------------- |
