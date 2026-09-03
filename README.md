@@ -137,6 +137,13 @@ python -m http.server -d browser-netstats 8080
 Ping works from `file://`; traceroute, DNS, and the web/TLS probe need network
 access to `api.globalping.io`.
 
+A status chip under the header checks `api.globalping.io` on load and every
+5 minutes (and immediately on the browser's `online`/`offline` events). When it
+can't be reached - offline, opened from disk with no internet, a captive portal
+- the three probe-backed cards grey out with a note and the ping tool is left
+fully usable, so a local no-internet session still gets browser-timed latency
+to whatever host you point it at.
+
 ## Configuration
 
 Constants at the top of the `<script>` block in `index.html`:

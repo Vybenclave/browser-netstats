@@ -42,6 +42,20 @@
   h1 .a{color:var(--cyan)}
   h1 .b{color:var(--magenta)}
   header p{margin:6px 0 0;font-size:12px;line-height:1.55;color:var(--muted);max-width:88ch}
+  .netbar{margin-top:12px;display:inline-flex;align-items:center;gap:8px;font-size:11px;
+          border:1px solid var(--border);border-radius:8px;padding:5px 11px;color:var(--dim);max-width:92ch}
+  .netbar .nb-dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex:none}
+  .netbar.checking .nb-dot{background:var(--yellow)}
+  .netbar.online{color:var(--fg-dim)}
+  .netbar.online .nb-dot{background:var(--green);box-shadow:0 0 6px var(--green)}
+  .netbar.offline{color:var(--yellow);border-color:var(--yellow)}
+  .netbar.offline .nb-dot{background:var(--yellow);box-shadow:0 0 6px var(--yellow)}
+
+  .offline-note{display:none;margin:6px 0 2px;font-size:11px;color:var(--yellow);
+                border:1px solid var(--yellow);border-radius:7px;padding:6px 9px;line-height:1.5}
+  body.net-offline .needs-net .offline-note{display:block}
+  body.net-offline .needs-net .row,
+  body.net-offline .needs-net .providers{opacity:.4;pointer-events:none}
 
   .grid{
     display:grid;gap:16px;align-items:start;
@@ -141,6 +155,10 @@
      <a href="https://globalping.io">Globalping</a> probe &mdash; which is also what lets DNS query
      any resolver, and what makes reading a certificate possible at all. Ping and traceroute
      results export to CSV.</p>
+  <div id="netbar" class="netbar checking">
+    <span class="nb-dot"></span>
+    <span id="nb-text">checking Globalping connectivity&hellip;</span>
+  </div>
 </header>
 
 <div class="grid">
@@ -204,8 +222,9 @@
   </section>
 
   <!-- ==================== TRACEROUTE ==================== -->
-  <section class="card" id="trace">
+  <section class="card needs-net" id="trace">
     <h2>Traceroute <span class="dot" id="trace-dot"></span></h2>
+    <div class="offline-note">Runs on a Globalping probe, which is unreachable right now. Ping still works offline.</div>
     <div class="sub">Runs from a Globalping probe &mdash; a browser can't send trace probes itself.
       Roughly 250&nbsp;runs/hour per IP, unauthenticated.</div>
 
@@ -236,8 +255,9 @@
   </section>
 
   <!-- ==================== DNS ==================== -->
-  <section class="card" id="dns">
+  <section class="card needs-net" id="dns">
     <h2>DNS lookup <span class="dot" id="dns-dot"></span></h2>
+    <div class="offline-note">Runs on a Globalping probe, which is unreachable right now. Ping still works offline.</div>
     <div class="sub">Runs from a Globalping probe so the resolver is your pick. SPF and DMARC are
       TXT lookups; enter an IP (or hit PTR) for a reverse lookup.</div>
 
@@ -278,8 +298,9 @@
   </section>
 
   <!-- ==================== WEB / TLS ==================== -->
-  <section class="card" id="web">
+  <section class="card needs-net" id="web">
     <h2>Web &amp; TLS probe <span class="dot" id="web-dot"></span></h2>
+    <div class="offline-note">Runs on a Globalping probe, which is unreachable right now. Ping still works offline.</div>
     <div class="sub">A HEAD request from a Globalping probe, one per port &mdash; reports the HTTP
       status and the served certificate. Public hosts only: Globalping refuses private / RFC1918
       addresses, and a browser can't read certificates at all.</div>
@@ -638,6 +659,7 @@
   async function runTrace() {
     const target = $("#trace-target").value.trim().replace(/^https?:\/\//i, "").replace(/\/.*$/, "");
     if (!target) return;
+    if (!requireNet(traceOut)) return;
     const maxHops = clamp(parseInt($("#trace-hops").value, 10) || 20, 1, 20);
     const from = $("#trace-from").value.trim() || "US";
     const protocol = $("#trace-proto").value;
@@ -739,6 +761,7 @@
   async function runDns() {
     const rawIn = $("#dns-name").value.trim();
     if (!rawIn) return;
+    if (!requireNet(dnsOut)) return;
     let uiType = $("#dns-type").value;
     let qType = DNS_VIRTUAL[uiType] || uiType;
 
@@ -942,6 +965,7 @@
   async function webCheck() {
     const target = cleanHost($("#web-target").value);
     if (!target) return;
+    if (!requireNet(webOut)) return;
     if (isPrivateV4(target)) {
       webOut.innerHTML = '<div class="meta err">' + esc(target) +
         " is a private address — the probe is on the public internet and can't reach it.</div>";
@@ -972,6 +996,7 @@
       esc(f.cn || "—") + "</td></tr>").join("") + "</tbody></table>";
 
   async function webSweep() {
+    if (!requireNet(webOut)) return;
     let ips;
     try { ips = expandRange($("#web-range").value); }
     catch (e) { webOut.innerHTML = '<div class="meta err">' + esc(e.message) + "</div>"; return; }
@@ -1022,6 +1047,55 @@
     $("#web-sweep-toggle").setAttribute("aria-expanded", String(!box.hidden));
     $("#web-sweep-toggle").innerHTML = box.hidden ? "Scan a range ▸" : "Hide range scan ▾";
   });
+
+  // =====================================================================
+  //  GLOBALPING CONNECTIVITY  -- checked on load + every 5 min
+  // =====================================================================
+  // Traceroute / DNS / Web run on a Globalping probe; ping is timed locally
+  // in the browser. When the API can't be reached (offline, running the file
+  // from disk with no internet, captive portal) the probe-backed cards are
+  // greyed out with a note and ping is left fully usable.
+  let netOnline = true;
+  const netbar = $("#netbar");
+
+  function paintNet(state, detail) {
+    netbar.className = "netbar " + state;
+    $("#nb-text").textContent =
+      state === "online"
+        ? "Globalping reachable  ·  checked " + new Date().toLocaleTimeString()
+        : state === "offline"
+        ? "Globalping unreachable" + (detail ? " (" + detail + ")" : "") +
+          "  —  traceroute, DNS and TLS tools are paused; ping still works"
+        : "checking Globalping connectivity…";
+    document.body.classList.toggle("net-offline", state === "offline");
+  }
+
+  async function checkNet() {
+    const ac = new AbortController();
+    const to = setTimeout(() => ac.abort(), 6000);
+    try {
+      const r = await fetch("https://api.globalping.io/v1/limits", { cache: "no-store", signal: ac.signal });
+      netOnline = r.ok;
+      paintNet(r.ok ? "online" : "offline", r.ok ? "" : "HTTP " + r.status);
+    } catch (e) {
+      netOnline = false;
+      paintNet("offline", e.name === "AbortError" ? "timeout" : "no route");
+    } finally {
+      clearTimeout(to);
+    }
+  }
+
+  function requireNet(outEl) {
+    if (netOnline) return true;
+    outEl.innerHTML = '<div class="meta err">Globalping is unreachable right now, so this tool is ' +
+      "paused. Ping still works offline (try a custom host on your LAN).</div>";
+    return false;
+  }
+
+  checkNet();
+  setInterval(checkNet, 300000);
+  window.addEventListener("online", checkNet);
+  window.addEventListener("offline", () => { netOnline = false; paintNet("offline", "browser reports offline"); });
 
   // ---- init ----
   selectTarget(TARGETS["aws-e"], "aws-e");
