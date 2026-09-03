@@ -110,6 +110,7 @@
   textarea:focus{outline:none;border-color:var(--magenta)}
   #tls-local-pane.drag{outline:1px dashed var(--cyan);outline-offset:5px;border-radius:8px}
   #tls-modes .btn.on{background:rgba(125,207,255,.14);border-color:var(--cyan);color:var(--cyan)}
+  #bwc{height:120px}
   body.net-offline #tls-public-pane .offline-note{display:block}
 
   .stats{margin-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:8px}
@@ -267,10 +268,27 @@
   <!-- ==================== BANDWIDTH ==================== -->
   <section class="card" id="bw">
     <h2>Bandwidth <span class="dot" id="bw-dot"></span></h2>
-    <div class="sub">Download / upload throughput to the nearest Cloudflare edge, plus latency
-      under load (bufferbloat). ~15&nbsp;s, uses a few tens of MB &mdash; mind mobile data.</div>
-    <div class="row"><button class="btn go" id="bw-run">Run test</button></div>
-    <div class="shbar"><button class="btn" id="bw-share" disabled>Share result</button></div>
+    <div class="sub">Down/up throughput to the nearest Cloudflare edge with a live trace, plus
+      latency under load (bufferbloat). Download is time-boxed (~10&nbsp;s, capped ~100&nbsp;MB),
+      upload ~18&nbsp;MB &mdash; mind mobile data. Every run is logged.</div>
+    <div class="row">
+      <button class="btn go" id="bw-run">Run test</button>
+      <button class="btn" id="bw-clear">Clear log</button>
+    </div>
+
+    <div class="gbox">
+      <div class="cap">
+        <span id="bw-cap">idle</span>
+        <span class="legend">
+          <span><i style="background:#7dcfff"></i>down</span>
+          <span><i style="background:#ff6ad5"></i>up</span>
+          <span><i style="background:#828cb4"></i>latency</span>
+        </span>
+      </div>
+      <canvas id="bwc"></canvas>
+    </div>
+
+    <div class="shbar"><button class="btn" id="bw-share" disabled>Share log</button></div>
     <div class="out" id="bw-out"><div class="meta">not run yet.</div></div>
   </section>
 
@@ -938,9 +956,20 @@
   $("#conn-run").addEventListener("click", connCheck);
   makeShare("#conn-share", connReport);
 
-  // ---- bandwidth ----
-  const BW = { downStreams: 4, downBytes: 10e6, upStreams: 3, upBytes: 5e6, latPings: 12 };
+  // ---- bandwidth: live trace + run log ----
+  const BW = { streams: 4, upStreams: 3, downMs: 10000, capBytes: 100e6, upBytes: 6e6, latMs: 300, sampleMs: 200 };
+  const bwc = $("#bwc"), bwx = bwc.getContext("2d");
+  let bwTrace = null;   // { down:[[s,mbps]], up:[[s,mbps]], lat:[[s,ms]], phase }
   let lastBw = null;
+  let bwLog = [];
+  try { bwLog = JSON.parse(localStorage.getItem("bnt.bwlog") || "[]"); } catch (_) { bwLog = []; }
+  try { bwTrace = JSON.parse(localStorage.getItem("bnt.bwtrace") || "null"); } catch (_) {}
+  const bwSave = () => {
+    try {
+      localStorage.setItem("bnt.bwlog", JSON.stringify(bwLog.slice(-50)));
+      localStorage.setItem("bnt.bwtrace", JSON.stringify(bwTrace));
+    } catch (_) {}
+  };
 
   async function bwPing() {
     const t0 = performance.now();
@@ -948,68 +977,217 @@
     catch (_) { return null; }
     return performance.now() - t0;
   }
+  const median = a => { if (!a.length) return NaN; const s = a.slice().sort((x, y) => x - y); return s[s.length >> 1]; };
+
+  function bwDraw() {
+    const dpr = window.devicePixelRatio || 1;
+    const w = bwc.clientWidth, h = bwc.clientHeight;
+    if (!w || !h) return;
+    bwc.width = w * dpr; bwc.height = h * dpr;
+    bwx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    bwx.clearRect(0, 0, w, h);
+    const t = bwTrace;
+    const padL = 42, padR = 34, padT = 8, padB = 14;
+    const gw = w - padL - padR, gh = h - padT - padB;
+
+    const all = t ? t.down.concat(t.up) : [];
+    const tMax = Math.max(10, ...all.map(p => p[0]));
+    const bwMax = niceMax(Math.max(20, ...all.map(p => p[1])));
+    const latAll = t ? t.lat.map(p => p[1]) : [];
+    const latMax = niceMax(Math.max(50, ...latAll));
+
+    bwx.font = "10px ui-monospace, monospace";
+    bwx.textBaseline = "middle";
+    for (let i = 0; i <= 4; i++) {
+      const y = padT + gh * (i / 4);
+      bwx.strokeStyle = "#404040"; bwx.globalAlpha = i === 4 ? 0.7 : 0.35;
+      bwx.beginPath(); bwx.moveTo(padL, y); bwx.lineTo(w - padR, y); bwx.stroke();
+      bwx.globalAlpha = 1;
+      bwx.fillStyle = "#b6bfe0"; bwx.textAlign = "right";
+      bwx.fillText(Math.round(bwMax * (1 - i / 4)), padL - 4, y);
+      bwx.fillStyle = "#828cb4"; bwx.textAlign = "left";
+      bwx.fillText(Math.round(latMax * (1 - i / 4)), w - padR + 4, y);
+    }
+    const X = s => padL + gw * Math.min(1, s / tMax);
+    const line = (pts, max, color, wd) => {
+      if (pts.length < 2) return;
+      bwx.strokeStyle = color; bwx.lineWidth = wd; bwx.beginPath();
+      pts.forEach((p, i) => {
+        const x = X(p[0]), y = padT + gh - gh * Math.min(1, p[1] / max);
+        i ? bwx.lineTo(x, y) : bwx.moveTo(x, y);
+      });
+      bwx.stroke();
+    };
+    if (t) {
+      bwx.globalAlpha = 0.5; line(t.lat, latMax, "#828cb4", 1); bwx.globalAlpha = 1;
+      line(t.down, bwMax, "#7dcfff", 1.6);
+      line(t.up, bwMax, "#ff6ad5", 1.6);
+    }
+  }
+
+  function bwRenderOut() {
+    const b = lastBw;
+    let html = b ? kvTable([
+      ["download", fix(b.down) + " Mbps"],
+      ["upload", fix(b.up) + " Mbps"],
+      ["latency idle", fix(b.idle, 0) + " ms"],
+      ["latency loaded", fix(b.loaded, 0) + " ms"],
+      ["bufferbloat", fix(b.bloat, 0) + " ms  ·  " + b.grade],
+      ["jitter", fix(b.jitter, 0) + " ms"],
+      b.edge ? ["edge", b.edge] : null,
+    ]) : '<div class="meta">not run yet.</div>';
+    if (bwLog.length) {
+      html += '<div class="meta" style="margin-top:10px">log &mdash; ' + bwLog.length + " run" +
+        (bwLog.length === 1 ? "" : "s") + "</div>";
+      html += '<table class="tbl"><thead><tr><th>when</th><th>down</th><th>up</th><th>bloat</th></tr></thead><tbody>' +
+        bwLog.slice(-8).reverse().map(r =>
+          "<tr><td>" + new Date(r.t).toLocaleString() + "</td><td>" + fix(r.down) + "</td><td>" +
+          fix(r.up) + "</td><td>" + fix(r.bloat, 0) + " ms</td></tr>").join("") + "</tbody></table>";
+    }
+    $("#bw-out").innerHTML = html;
+  }
+
+  async function bwDownload(trace, addLat) {
+    const ac = new AbortController();
+    let total = 0, prev = 0, prevT = 0;
+    const started = performance.now();
+    const pump = async () => {
+      try {
+        const r = await fetch("https://speed.cloudflare.com/__down?bytes=" + BW.capBytes + "&r=" + Math.random(),
+          { cache: "no-store", signal: ac.signal });
+        const rd = r.body.getReader();
+        for (;;) {
+          const { done, value } = await rd.read();
+          if (done) break;
+          total += value.length;
+          if (total >= BW.capBytes) { ac.abort(); break; }
+        }
+      } catch (_) { /* aborted / ended */ }
+    };
+    const sampler = setInterval(() => {
+      const el = performance.now() - started;
+      trace.down.push([el / 1000, mbps(total - prev, el - prevT)]);
+      prev = total; prevT = el;
+      bwDraw();
+    }, BW.sampleMs);
+    const latLoop = setInterval(async () => {
+      const v = await bwPing();
+      if (v != null) { addLat(v); trace.lat.push([(performance.now() - started) / 1000, v]); bwDraw(); }
+    }, BW.latMs);
+    const stop = setTimeout(() => ac.abort(), BW.downMs);
+    await Promise.all(Array.from({ length: BW.streams }, pump));
+    clearInterval(sampler); clearInterval(latLoop); clearTimeout(stop);
+    const secs = (performance.now() - started) / 1000;
+    return { bytes: total, mbps: mbps(total, secs * 1000), secs };
+  }
+
+  function bwUploadStream(base, onLoaded) {
+    return new Promise(res => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", "https://speed.cloudflare.com/__up");
+      xhr.upload.onprogress = e => onLoaded(e.loaded);
+      xhr.onloadend = res;
+      xhr.onerror = res;
+      try { xhr.send(new Blob([new Uint8Array(BW.upBytes)])); } catch (_) { res(); }
+    });
+  }
+
   async function bwRun() {
     busy("#bw-run", "#bw-dot", true);
-    const set = h => { $("#bw-out").innerHTML = h; };
+    const trace = { down: [], up: [], lat: [], phase: "idle" };
+    bwTrace = trace;
+    const idle = [], loaded = [];
 
-    set('<div class="meta">idle latency &hellip;</div>');
-    const idle = [];
-    for (let i = 0; i < BW.latPings; i++) { const v = await bwPing(); if (v != null) idle.push(v); }
-    idle.sort((a, b) => a - b);
-    const idleMed = idle.length ? idle[idle.length >> 1] : NaN;
-    const jitter = idle.length > 1 ? idle[idle.length - 1] - idle[0] : NaN;
+    $("#bw-cap").textContent = "idle latency…";
+    for (let i = 0; i < 10; i++) { const v = await bwPing(); if (v != null) idle.push(v); }
+    const idleMed = median(idle);
+    const jitter = idle.length > 1 ? Math.max(...idle) - Math.min(...idle) : NaN;
 
-    set('<div class="meta">download &hellip;</div>');
-    const loaded = [];
-    let stopLat = false;
-    (async () => { while (!stopLat) { const v = await bwPing(); if (v != null) loaded.push(v); await sleep(250); } })();
-    const dT0 = performance.now();
-    await Promise.all(Array.from({ length: BW.downStreams }, () =>
-      fetch("https://speed.cloudflare.com/__down?bytes=" + BW.downBytes + "&r=" + Math.random(),
-        { cache: "no-store" }).then(r => r.arrayBuffer()).catch(() => {})));
-    const downMs = performance.now() - dT0;
-    stopLat = true;
-    const downMbps = mbps(BW.downStreams * BW.downBytes, downMs);
-    loaded.sort((a, b) => a - b);
-    const loadedMed = loaded.length ? loaded[loaded.length >> 1] : NaN;
+    $("#bw-cap").textContent = "download…"; trace.phase = "download";
+    const dn = await bwDownload(trace, v => loaded.push(v));
 
-    set('<div class="meta">upload &hellip;</div>');
-    const body = new Blob([new Uint8Array(BW.upBytes)]);
-    const uT0 = performance.now();
-    await Promise.all(Array.from({ length: BW.upStreams }, () =>
-      fetch("https://speed.cloudflare.com/__up", { method: "POST", body, cache: "no-store" }).catch(() => {})));
-    const upMbps = mbps(BW.upStreams * BW.upBytes, performance.now() - uT0);
+    $("#bw-cap").textContent = "upload…"; trace.phase = "upload";
+    const upStart = performance.now();
+    let upTotal = 0;
+    const perStream = new Array(BW.upStreams).fill(0);
+    const upLat = setInterval(async () => {
+      const v = await bwPing();
+      if (v != null) { loaded.push(v); trace.lat.push([(performance.now() - upStart + dn.secs * 1000) / 1000, v]); }
+    }, BW.latMs);
+    const upTick = setInterval(() => {
+      upTotal = perStream.reduce((a, b) => a + b, 0);
+      trace.up.push([(performance.now() - upStart + dn.secs * 1000) / 1000, mbps(upTotal, performance.now() - upStart)]);
+      bwDraw();
+    }, BW.sampleMs);
+    await Promise.all(Array.from({ length: BW.upStreams }, (_, i) =>
+      bwUploadStream(i, l => { perStream[i] = l; })));
+    clearInterval(upLat); clearInterval(upTick);
+    const upMs = performance.now() - upStart;
+    const upMbps = mbps(BW.upStreams * BW.upBytes, upMs);
 
+    const loadedMed = median(loaded);
     const bloat = isFinite(loadedMed) && isFinite(idleMed) ? loadedMed - idleMed : NaN;
     const grade = !isFinite(bloat) ? "—" : bloat < 20 ? "A (excellent)" : bloat < 50 ? "B (good)"
       : bloat < 100 ? "C (fair)" : bloat < 200 ? "D (poor)" : "F (bad)";
-    lastBw = { downMbps, upMbps, idleMed, loadedMed, bloat, jitter, grade };
-    set(kvTable([
-      ["download", fix(downMbps) + " Mbps"],
-      ["upload", fix(upMbps) + " Mbps"],
-      ["latency idle", fix(idleMed, 0) + " ms"],
-      ["latency loaded", fix(loadedMed, 0) + " ms"],
-      ["bufferbloat", fix(bloat, 0) + " ms  ·  " + grade],
-      ["jitter", fix(jitter, 0) + " ms"],
-    ]));
-    $("#bw-share").disabled = false;
+
+    let edge = "";
+    try {
+      const tr = Object.fromEntries((await (await fetch("https://cloudflare-dns.com/cdn-cgi/trace",
+        { cache: "no-store" })).text()).trim().split("\n").map(l => l.split("=")));
+      edge = tr.colo || "";
+    } catch (_) {}
+
+    trace.phase = "done";
+    lastBw = { down: dn.mbps, up: upMbps, idle: idleMed, loaded: loadedMed, bloat, jitter, grade, edge };
+    bwLog.push({ t: Date.now(), down: dn.mbps, up: upMbps, idle: idleMed, loaded: loadedMed, bloat, jitter, edge });
+    bwSave();
+    $("#bw-cap").textContent = fix(dn.mbps) + " / " + fix(upMbps) + " Mbps  ·  bloat " + fix(bloat, 0) + " ms";
+    bwDraw();
+    bwRenderOut();
+    $("#bw-share").disabled = bwLog.length === 0;
     busy("#bw-run", "#bw-dot", false);
   }
+
   function bwReport() {
-    if (!lastBw) return null;
-    const b = lastBw;
-    const rows = [["download_mbps", fix(b.downMbps)], ["upload_mbps", fix(b.upMbps)],
-      ["latency_idle_ms", fix(b.idleMed, 0)], ["latency_loaded_ms", fix(b.loadedMed, 0)],
-      ["bufferbloat_ms", fix(b.bloat, 0)], ["bufferbloat_grade", b.grade], ["jitter_ms", fix(b.jitter, 0)]];
-    return {
-      base: "bandwidth_" + stamp(), title: "Bandwidth test",
-      csv: csvString([["field", "value"], ...rows]),
-      txt: ["Browser Network Toolkit — Bandwidth", "when : " + new Date().toISOString(), "",
-        ...rows.map(r => r[0].padEnd(18) + ": " + r[1])].join("\n"),
-    };
+    if (!bwLog.length) return null;
+    const csv = csvString([
+      ["iso_time", "down_mbps", "up_mbps", "latency_idle_ms", "latency_loaded_ms", "bufferbloat_ms", "jitter_ms", "cf_edge"],
+      ...bwLog.map(r => [new Date(r.t).toISOString(), fix(r.down, 2), fix(r.up, 2),
+        fix(r.idle, 0), fix(r.loaded, 0), fix(r.bloat, 0), fix(r.jitter, 0), r.edge || ""]),
+    ]);
+    const b = lastBw || bwLog[bwLog.length - 1];
+    const txt = [
+      "Browser Network Toolkit — Bandwidth log",
+      "runs : " + bwLog.length + "   exported " + new Date().toISOString(),
+      "",
+      "latest:",
+      "  download      : " + fix(b.down) + " Mbps",
+      "  upload        : " + fix(b.up) + " Mbps",
+      "  latency idle  : " + fix(b.idle, 0) + " ms",
+      "  latency loaded: " + fix(b.loaded, 0) + " ms",
+      "  bufferbloat   : " + fix(b.bloat, 0) + " ms (" + (b.grade || "") + ")",
+      "  jitter        : " + fix(b.jitter, 0) + " ms",
+      b.edge ? "  edge          : " + b.edge : "",
+      "",
+      "iso_time                     down    up      bloat",
+      ...bwLog.map(r => new Date(r.t).toISOString() + "  " +
+        (fix(r.down) + " Mbps").padStart(11) + "  " + (fix(r.up) + "").padStart(6) + "  " + fix(r.bloat, 0) + " ms"),
+    ].filter(x => x !== "").join("\n");
+    return { base: "bandwidth-log_" + stamp(), title: "Bandwidth log", txt, csv };
   }
+
   $("#bw-run").addEventListener("click", bwRun);
+  $("#bw-clear").addEventListener("click", () => {
+    bwLog = []; bwTrace = null; lastBw = null; bwSave();
+    $("#bw-cap").textContent = "idle";
+    $("#bw-share").disabled = true;
+    bwDraw(); bwRenderOut();
+  });
   makeShare("#bw-share", bwReport);
+  addEventListener("resize", bwDraw);
+  if (bwLog.length) { $("#bw-share").disabled = false; }
+  bwRenderOut();
+  bwDraw();
 
   // ---- NAT type (WebRTC + STUN) ----
   let lastNat = null;
