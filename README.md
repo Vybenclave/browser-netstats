@@ -119,7 +119,11 @@ Output is a hop table (`# / host / ip / rtt`) plus the raw probe output.
 
 ## DNS lookup
 
-Also runs on a Globalping probe, which is what makes the **resolver** a choice:
+Two tabs.
+
+### Lookup
+
+Runs on a Globalping probe, which is what makes the **resolver** a choice:
 **Default** (the probe's own resolver), **Cloudflare** `1.1.1.1`, **Google**
 `8.8.8.8`, **Comcast** `75.75.75.75`, or **Custom** (any resolver IP or FQDN).
 `75.75.75.75` only answers Comcast subscribers, so picking Comcast also pins
@@ -137,6 +141,25 @@ automatically).
 
 Output shows the resolver that answered, the response code, query time, and an
 answer table (`name / type / ttl / data`).
+
+### Email check
+
+Enter a domain; resolves **over DoH straight from the browser** (Cloudflare
+`cloudflare-dns.com`), so it needs no probe and no quota - and works when
+Globalping is down. Reports:
+
+- **MX** - hosts sorted by preference, or a warning if the domain takes no mail.
+- **SPF** - the `v=spf1` record with its `-all` / `~all` / `?all` / `+all`
+  mechanism badged, and an error if more than one SPF record exists.
+- **DMARC** - the `v=DMARC1` record at `_dmarc.<domain>` with the `p=` policy
+  badged (`reject` / `quarantine` = ok, `none` = monitor-only).
+- **DKIM** - probes ~25 common selectors (`default`, `google`, `selector1/2`,
+  `s1/s2`, `k1/k2/k3`, `protonmail*`, `fm1-3`, `pm`, `zoho`, `sig1`, …) at
+  `<selector>._domainkey.<domain>` and lists the ones that resolve, as a TXT
+  key or a CNAME delegation. DKIM selectors are provider-specific, so a blank
+  here doesn't prove DKIM is missing.
+
+**Share** exports the whole thing as text and a `record,value` CSV.
 
 ## Web probe
 

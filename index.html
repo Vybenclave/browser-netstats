@@ -120,9 +120,12 @@
            border-radius:7px;padding:7px 9px;width:100%;resize:vertical;line-height:1.4}
   textarea:focus{outline:none;border-color:var(--magenta)}
   #tls-local-pane.drag{outline:1px dashed var(--cyan);outline-offset:5px;border-radius:8px}
-  #tls-modes .btn.on{background:rgba(125,207,255,.14);border-color:var(--cyan);color:var(--cyan)}
+  #tls-modes .btn.on,
+  #dns-tabs .btn.on{background:rgba(125,207,255,.14);border-color:var(--cyan);color:var(--cyan)}
   #bwc{height:140px}
   body.net-offline #tls-public-pane .offline-note{display:block}
+  body.net-offline #dns-tabs,
+  body.net-offline #dns-email-pane .row{opacity:1;pointer-events:auto}
 
   .stats{margin-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:8px}
   .stat{background:var(--field);border:1px solid var(--border);border-radius:8px;padding:8px 10px;min-width:0}
@@ -197,7 +200,7 @@
     </dl>
     <p class="dgrp">Globalping probe &mdash; a browser can't do these</p>
     <dl>
-      <dt>DNS lookup</dt><dd>Any record type (incl. SPF / DMARC / reverse) from a resolver you pick &mdash; Cloudflare, Google, Comcast or custom.</dd>
+      <dt>DNS lookup</dt><dd>Any record type (incl. SPF / DMARC / reverse) from a resolver you pick &mdash; Cloudflare, Google, Comcast or custom. An <b>Email check</b> tab pulls MX / SPF / DMARC / common DKIM selectors over DoH (local, no probe).</dd>
       <dt>Traceroute</dt><dd>Hop-by-hop path to a target; ICMP / TCP / UDP, pick the probe location.</dd>
       <dt>Web probe</dt><dd>HTTP status + Server/redirect headers per port, or a live/offline sweep of a small IP range.</dd>
     </dl>
@@ -330,41 +333,60 @@
   <!-- ==================== DNS ==================== -->
   <section class="card needs-net" id="dns">
     <h2>DNS lookup <span class="dot" id="dns-dot"></span></h2>
-    <div class="offline-note">Runs on a Globalping probe, which is unreachable right now. Ping still works offline.</div>
-    <div class="sub">Runs from a Globalping probe so the resolver is your pick. SPF and DMARC are
-      TXT lookups; enter an IP (or hit PTR) for a reverse lookup.</div>
+    <div class="offline-note">Lookup runs on a Globalping probe, which is unreachable right now. Email check works offline (DoH).</div>
 
-    <div class="row">
-      <label class="fld grow">name / ip
-        <input class="host" id="dns-name" type="text" placeholder="example.com  ·  or an IP to reverse" spellcheck="false" autocomplete="off">
-      </label>
-      <label class="fld">type
-        <select id="dns-type">
-          <option>A</option><option>AAAA</option><option>CNAME</option><option>NS</option>
-          <option>MX</option><option>TXT</option><option>SPF</option><option>DMARC</option>
-          <option>SOA</option><option>SRV</option><option>PTR</option>
-        </select>
-      </label>
+    <div class="row" id="dns-tabs">
+      <button class="btn on" data-tab="lookup">Lookup</button>
+      <button class="btn" data-tab="email">Email check</button>
     </div>
-    <div class="row">
-      <label class="fld">resolver
-        <select id="dns-resolver">
-          <option value="default">Default</option>
-          <option value="1.1.1.1">Cloudflare</option>
-          <option value="8.8.8.8">Google</option>
-          <option value="75.75.75.75">Comcast</option>
-          <option value="custom">Custom</option>
-        </select>
-      </label>
-      <label class="fld" id="dns-custom-wrap" hidden>resolver ip / host
-        <input class="from" id="dns-resolver-custom" type="text" placeholder="9.9.9.9" spellcheck="false" autocomplete="off">
-      </label>
-      <label class="fld">probe
-        <input class="from" id="dns-from" type="text" value="US" placeholder="US, New York&hellip;" spellcheck="false" autocomplete="off">
-      </label>
+
+    <div id="dns-lookup-pane">
+      <div class="sub">Runs from a Globalping probe so the resolver is your pick. SPF and DMARC are
+        TXT lookups; enter an IP (or hit PTR) for a reverse lookup.</div>
+      <div class="row">
+        <label class="fld grow">name / ip
+          <input class="host" id="dns-name" type="text" placeholder="example.com  ·  or an IP to reverse" spellcheck="false" autocomplete="off">
+        </label>
+        <label class="fld">type
+          <select id="dns-type">
+            <option>A</option><option>AAAA</option><option>CNAME</option><option>NS</option>
+            <option>MX</option><option>TXT</option><option>SPF</option><option>DMARC</option>
+            <option>SOA</option><option>SRV</option><option>PTR</option>
+          </select>
+        </label>
+      </div>
+      <div class="row">
+        <label class="fld">resolver
+          <select id="dns-resolver">
+            <option value="default">Default</option>
+            <option value="1.1.1.1">Cloudflare</option>
+            <option value="8.8.8.8">Google</option>
+            <option value="75.75.75.75">Comcast</option>
+            <option value="custom">Custom</option>
+          </select>
+        </label>
+        <label class="fld" id="dns-custom-wrap" hidden>resolver ip / host
+          <input class="from" id="dns-resolver-custom" type="text" placeholder="9.9.9.9" spellcheck="false" autocomplete="off">
+        </label>
+        <label class="fld">probe
+          <input class="from" id="dns-from" type="text" value="US" placeholder="US, New York&hellip;" spellcheck="false" autocomplete="off">
+        </label>
+      </div>
+      <div class="row">
+        <button class="btn go" id="dns-run">Lookup</button>
+      </div>
     </div>
-    <div class="row">
-      <button class="btn go" id="dns-run">Lookup</button>
+
+    <div id="dns-email-pane" hidden>
+      <div class="sub">MX, SPF, DMARC and common DKIM selectors for a domain &mdash; resolved over
+        DoH straight from here, so no probe and no quota. DKIM is provider-specific: a selector not
+        listed here doesn't mean DKIM is missing.</div>
+      <div class="row">
+        <label class="fld grow">domain
+          <input class="host" id="email-domain" type="text" placeholder="example.com" spellcheck="false" autocomplete="off">
+        </label>
+        <button class="btn go" id="email-run">Check</button>
+      </div>
     </div>
 
     <div class="shbar"><button class="btn" id="dns-share" disabled>Share result</button></div>
@@ -1578,8 +1600,142 @@
   }
 
   $("#dns-run").addEventListener("click", runDns);
-  makeShare("#dns-share", dnsReport);
   $("#dns-name").addEventListener("keydown", e => { if (e.key === "Enter") runDns(); });
+
+  // ---- email check: MX / SPF / DMARC / DKIM over DoH (no probe, no quota) ----
+  const DKIM_SELECTORS = [
+    "default", "google", "selector1", "selector2", "s1", "s2", "k1", "k2", "k3",
+    "mail", "dkim", "smtp", "mxvault", "mandrill", "pm", "zoho", "sig1",
+    "protonmail", "protonmail2", "protonmail3", "fm1", "fm2", "fm3", "key1", "ctct1",
+  ];
+  const DOH_TYPE = { 1: "A", 2: "NS", 5: "CNAME", 15: "MX", 16: "TXT", 28: "AAAA" };
+  const joinTxt = d => String(d).replace(/^"|"$/g, "").replace(/"\s+"/g, "");
+  let lastEmail = null;
+
+  async function doh(name, type) {
+    const r = await fetch("https://cloudflare-dns.com/dns-query?name=" + encodeURIComponent(name) + "&type=" + type,
+      { headers: { accept: "application/dns-json" }, cache: "no-store" });
+    return r.json();
+  }
+  const ans = (j, t) => ((j && j.Answer) || []).filter(a => DOH_TYPE[a.type] === t);
+
+  function emailAnalyse(d, mx, spf, dmarc, dkimResults) {
+    const mxs = ans(mx, "MX").map(a => {
+      const [p, ...h] = joinTxt(a.data).split(/\s+/);
+      return { pref: +p, host: h.join(" ").replace(/\.$/, "") };
+    }).sort((a, b) => a.pref - b.pref);
+
+    const spfRecs = ans(spf, "TXT").map(a => joinTxt(a.data)).filter(v => /^v=spf1\b/i.test(v));
+    const spf1 = spfRecs[0] || "";
+    const allMech = (spf1.match(/([~\-?+])all\b/i) || [])[1] || "";
+
+    const dmRec = ans(dmarc, "TXT").map(a => joinTxt(a.data)).find(v => /^v=DMARC1\b/i.test(v)) || "";
+    const dmP = (dmRec.match(/\bp\s*=\s*(none|quarantine|reject)/i) || [])[1] || "";
+
+    const dkim = [];
+    dkimResults.forEach((j, i) => {
+      const sel = DKIM_SELECTORS[i];
+      const cn = ans(j, "CNAME")[0];
+      const txt = ans(j, "TXT").map(a => joinTxt(a.data)).find(v => /(^v=DKIM1\b|(^|;)\s*[pk]\s*=)/i.test(v));
+      if (txt) dkim.push({ sel, kind: "TXT", detail: txt.length > 60 ? txt.slice(0, 60) + "…" : txt });
+      else if (cn) dkim.push({ sel, kind: "CNAME", detail: joinTxt(cn.data).replace(/\.$/, "") });
+    });
+
+    return { d, mxs, spf1, spfCount: spfRecs.length, allMech, dmRec, dmP, dkim };
+  }
+
+  function emailRender(a) {
+    const badge = (cls, txt) => ' <span class="badge ' + cls + '">' + esc(txt) + "</span>";
+    const rows = [];
+
+    rows.push(["MX (" + a.mxs.length + ")", a.mxs.length
+      ? a.mxs.map(m => m.pref + "  " + esc(m.host)).join("<br>")
+      : '<span class="warn">none — domain does not receive mail</span>', 1]);
+
+    rows.push(["SPF", a.spf1
+      ? esc(a.spf1) + badge(a.allMech === "-" ? "ok" : a.allMech === "~" ? "ok" : "warn",
+          (a.allMech || "?") + "all") + (a.spfCount > 1 ? badge("err", a.spfCount + " SPF records") : "")
+      : badge("err", "missing"), 1]);
+
+    rows.push(["DMARC", a.dmRec
+      ? esc(a.dmRec) + badge(a.dmP === "reject" || a.dmP === "quarantine" ? "ok" : "warn",
+          a.dmP ? "p=" + a.dmP : "no policy")
+      : badge("err", "missing"), 1]);
+
+    rows.push(["DKIM", a.dkim.length
+      ? a.dkim.map(k => "<b>" + esc(k.sel) + "</b>: " +
+          (k.kind === "CNAME" ? "delegated &rarr; " + esc(k.detail) : esc(k.detail))).join("<br>") +
+        badge("ok", a.dkim.length + " selector" + (a.dkim.length === 1 ? "" : "s"))
+      : badge("warn", "no common selector found"), 1]);
+
+    dnsOut.innerHTML = '<div class="meta">email DNS for ' + esc(a.d) +
+      "  ·  " + DKIM_SELECTORS.length + " DKIM selectors probed</div>" +
+      '<table class="kv">' + rows.map(r =>
+        "<tr><td>" + esc(r[0]) + "</td><td>" + r[1] + "</td></tr>").join("") + "</table>";
+  }
+
+  async function emailCheck() {
+    const d = cleanHost($("#email-domain").value);
+    if (!d) return;
+    busy("#email-run", "#dns-dot", true);
+    dnsOut.innerHTML = '<div class="meta">checking ' + esc(d) + " &hellip;</div>";
+    try {
+      const [mx, spf, dmarc, ...dkim] = await Promise.all([
+        doh(d, "MX"), doh(d, "TXT"), doh("_dmarc." + d, "TXT"),
+        ...DKIM_SELECTORS.map(s => doh(s + "._domainkey." + d, "TXT").catch(() => ({}))),
+      ]);
+      lastEmail = emailAnalyse(d, mx, spf, dmarc, dkim);
+      emailRender(lastEmail);
+      $("#dns-share").disabled = false;
+    } catch (e) {
+      dnsOut.innerHTML = '<div class="meta err">Error: ' + esc(e.message) + "</div>";
+    } finally {
+      busy("#email-run", "#dns-dot", false);
+    }
+  }
+
+  function emailReport() {
+    if (!lastEmail) return null;
+    const a = lastEmail;
+    const lines = [
+      "Browser Network Toolkit — Email DNS check",
+      "domain : " + a.d,
+      "when   : " + new Date().toISOString(),
+      "",
+      "MX:",
+      ...(a.mxs.length ? a.mxs.map(m => "  " + m.pref + "  " + m.host) : ["  (none)"]),
+      "",
+      "SPF   : " + (a.spf1 || "(missing)") + (a.spfCount > 1 ? "   [!] " + a.spfCount + " SPF records" : ""),
+      "DMARC : " + (a.dmRec || "(missing)"),
+      "",
+      "DKIM (" + a.dkim.length + " of " + DKIM_SELECTORS.length + " probed selectors resolved):",
+      ...(a.dkim.length ? a.dkim.map(k => "  " + k.sel + "  " + k.kind + "  " + k.detail) : ["  (none of the common selectors)"]),
+    ];
+    const csv = csvString([
+      ["record", "value"],
+      ...a.mxs.map(m => ["MX", m.pref + " " + m.host]),
+      ["SPF", a.spf1],
+      ["DMARC", a.dmRec],
+      ...a.dkim.map(k => ["DKIM:" + k.sel, k.kind + " " + k.detail]),
+    ]);
+    return { base: "email-dns_" + slug(a.d) + "_" + stamp(), title: "Email DNS — " + a.d,
+      txt: lines.join("\n"), csv };
+  }
+
+  [...document.querySelectorAll("#dns-tabs .btn")].forEach(btn => {
+    btn.addEventListener("click", () => {
+      const email = btn.dataset.tab === "email";
+      document.querySelectorAll("#dns-tabs .btn").forEach(x => x.classList.toggle("on", x === btn));
+      $("#dns-lookup-pane").hidden = email;
+      $("#dns-email-pane").hidden = !email;
+      $("#dns-share").disabled = true;
+      dnsOut.innerHTML = '<div class="meta">' + (email ? "enter a domain." : "no query yet.") + "</div>";
+    });
+  });
+  $("#email-run").addEventListener("click", emailCheck);
+  $("#email-domain").addEventListener("keydown", e => { if (e.key === "Enter") emailCheck(); });
+  makeShare("#dns-share", () =>
+    $("#dns-email-pane").hidden ? dnsReport() : emailReport());
 
   // =====================================================================
   //  WEB PROBE  -- HTTP(S) status + range sweep, on a Globalping probe
