@@ -10,13 +10,14 @@
     /* page: tokyo night deep blue */
     --bg:#0d0f1a;
     --bg-2:#161a2e;
-    /* panels: tokyo night */
+    /* panels */
     --panel:#1a1b26;
     --panel-2:#24283b;
     --field:#10121c;
     --border:#2b3350;
     --fg:#c0caf5;
     --fg-dim:#a9b1d6;
+    --dim:#8b93b8;          /* brighter than grid, dimmer than fg */
     --muted:#565f89;
     /* accents */
     --cyan:#7dcfff;
@@ -24,96 +25,229 @@
     --blue:#7aa2f7;
     --green:#9ece6a;
     --red:#f7768e;
-    --grid:#404040;          /* 25% grey */
+    --yellow:#e0af68;
+    --grid:#404040;         /* 25% grey */
   }
   *{box-sizing:border-box}
-  html,body{height:100%}
+  html,body{min-height:100%}
   body{
     margin:0;
     font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-    background:radial-gradient(1200px 820px at 72% -12%, var(--bg-2), var(--bg));
+    background:radial-gradient(1200px 820px at 72% -12%, var(--bg-2), var(--bg)) fixed;
     color:var(--fg);
-    display:flex;flex-direction:column;min-height:100%;
   }
-  header{padding:20px 24px 8px}
+  header{padding:20px 24px 4px}
   h1{margin:0;font-size:19px;letter-spacing:.5px}
   h1 .a{color:var(--cyan)}
   h1 .b{color:var(--magenta)}
-  header p{margin:6px 0 0;font-size:12px;line-height:1.5;color:var(--muted);max-width:78ch}
-  .wrap{display:flex;flex-direction:column;gap:14px;padding:14px 24px 20px}
-  .panel{background:var(--panel);border:1px solid var(--border);border-radius:10px}
-  .controls{padding:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-  button{
+  header p{margin:6px 0 0;font-size:12px;line-height:1.55;color:var(--muted);max-width:88ch}
+
+  .grid{
+    display:grid;gap:16px;align-items:start;
+    grid-template-columns:repeat(auto-fill,minmax(440px,1fr));
+    padding:16px 24px 28px;
+  }
+  @media (max-width:520px){ .grid{grid-template-columns:1fr} }
+
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px;max-width:520px}
+  .card h2{margin:0;font-size:14px;color:var(--fg)}
+  .card .sub{font-size:11px;color:var(--dim);margin:3px 0 4px;line-height:1.5}
+
+  .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--muted);margin-left:7px;vertical-align:middle}
+  .dot.live{background:var(--green);box-shadow:0 0 7px var(--green)}
+  .dot.busy{background:var(--yellow);box-shadow:0 0 7px var(--yellow)}
+
+  .btn{
     font:inherit;font-size:12px;background:var(--panel-2);color:var(--fg-dim);
     border:1px solid var(--border);border-radius:7px;padding:7px 12px;cursor:pointer;
     transition:border-color .12s,color .12s,background .12s;
   }
-  button:hover{border-color:var(--cyan);color:var(--fg)}
-  button.active{background:rgba(125,207,255,.14);border-color:var(--cyan);color:var(--cyan)}
-  button#toggle{border-color:var(--green);color:var(--green)}
-  button#toggle.stop{border-color:var(--red);color:var(--red)}
-  .sep{flex:1 1 12px}
-  input[type=text]{
+  .btn:hover:not(:disabled){border-color:var(--cyan);color:var(--fg)}
+  .btn:disabled{opacity:.45;cursor:default}
+  .btn.sm{padding:5px 10px;font-size:11px}
+  .btn.on{background:rgba(125,207,255,.14);border-color:var(--cyan);color:var(--cyan)}
+  .btn.go{border-color:var(--green);color:var(--green)}
+  .btn.go.stop{border-color:var(--red);color:var(--red)}
+
+  .providers{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+  .prov{display:flex;flex-direction:column;gap:6px}
+  .ph{font-size:10px;text-transform:uppercase;letter-spacing:.13em;color:var(--dim);text-align:center}
+  .prov .btn{width:100%}
+
+  .row{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-top:10px}
+  .fld{display:flex;flex-direction:column;gap:3px;font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--dim)}
+  .fld.grow{flex:1;min-width:150px}
+  input,select{
     font:inherit;font-size:12px;background:var(--field);color:var(--fg);
-    border:1px solid var(--border);border-radius:7px;padding:7px 10px;width:230px;
+    border:1px solid var(--border);border-radius:7px;padding:6px 9px;
   }
-  input[type=text]:focus{outline:none;border-color:var(--magenta)}
-  .stats{padding:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
-  .stat{background:var(--field);border:1px solid var(--border);border-radius:8px;padding:10px 12px;min-width:0}
-  .stat .k{font-size:10px;text-transform:uppercase;letter-spacing:.13em;color:var(--muted)}
-  .stat .v{font-size:20px;margin-top:4px;color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .stat .v.sm{font-size:13px;white-space:normal}
+  input:focus,select:focus{outline:none;border-color:var(--magenta)}
+  input.host{width:100%;min-width:0}
+  input.hops{width:74px}
+  input.from{width:150px}
+
+  .stats{margin-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:8px}
+  .stat{background:var(--field);border:1px solid var(--border);border-radius:8px;padding:8px 10px;min-width:0}
+  .stat .k{font-size:9px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted)}
+  .stat .v{font-size:17px;margin-top:3px;color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .stat .v.sm{font-size:12px;white-space:normal}
   .stat.loss .v{color:var(--magenta)}
-  .graph{align-self:flex-start;width:100%;max-width:500px;display:flex;flex-direction:column;gap:6px;padding:10px}
-  .graph .cap{display:flex;justify-content:space-between;align-items:center;font-size:10px;color:var(--muted)}
+
+  .gbox{margin-top:12px;background:var(--field);border:1px solid var(--border);border-radius:8px;padding:8px}
+  .gbox .cap{display:flex;justify-content:space-between;align-items:center;font-size:10px;color:var(--dim)}
   canvas{width:100%;height:100px;display:block}
   .legend{display:flex;gap:12px}
   .legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:middle}
-  footer{padding:0 24px 18px;font-size:11px;color:var(--muted)}
+
+  .out{margin-top:12px}
+  .meta{font-size:11px;color:var(--dim)}
+  .meta.err{color:var(--red)}
+  .tbl{width:100%;border-collapse:collapse;font-size:11px;margin-top:8px}
+  .tbl th{text-align:left;font-weight:normal;color:var(--dim);padding:4px 8px;border-bottom:1px solid var(--border)}
+  .tbl td{padding:4px 8px;border-bottom:1px solid rgba(255,255,255,.045);color:var(--fg-dim);
+          white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:190px}
+  .tbl tr:hover td{color:var(--fg)}
+  pre.raw{margin-top:8px;max-height:150px;overflow:auto;background:#0b0d16;border:1px solid var(--border);
+          border-radius:6px;padding:8px;font-size:10.5px;line-height:1.45;color:var(--fg-dim);white-space:pre}
+
+  footer{padding:0 24px 22px;font-size:11px;color:var(--muted)}
   footer a{color:var(--blue)}
 </style>
 </head>
 <body>
 <header>
   <h1>Browser <span class="a">Network</span> <span class="b">Toolkit</span></h1>
-  <p>Times an HTTPS request to a regional endpoint from your browser, once every 500&nbsp;ms. This is
-     not ICMP &mdash; a browser can't send a real ping &mdash; so each value includes DNS/TLS/HTTP
-     overhead, and a request that errors or doesn't answer within 2&nbsp;s is counted as a lost packet.</p>
+  <p>A few network tools that run in the page. <b>Ping</b> is timed from your browser as an HTTPS
+     round-trip (not ICMP), once every 500&nbsp;ms. <b>Traceroute</b> can't run in a browser at all,
+     so it executes on a <a href="https://globalping.io">Globalping</a> probe. <b>DNS</b> is resolved
+     over DoH straight from here. Ping and traceroute results export to CSV.</p>
 </header>
 
-<div class="wrap">
-  <div class="panel controls">
-    <div id="targets" style="display:flex;flex-wrap:wrap;gap:8px"></div>
-    <span class="sep"></span>
-    <input id="custom" type="text" placeholder="custom host or IP, e.g. 1.1.1.1" spellcheck="false" autocomplete="off">
-    <button id="useCustom">Use</button>
-    <button id="toggle">Start</button>
-    <button id="clear">Clear</button>
-  </div>
+<div class="grid">
 
-  <div class="panel stats">
-    <div class="stat"><div class="k">Target</div><div class="v sm" id="s-target">&mdash;</div></div>
-    <div class="stat"><div class="k">Last</div><div class="v" id="s-last">&mdash;</div></div>
-    <div class="stat"><div class="k">Min / Avg / Max</div><div class="v sm" id="s-mam">&mdash;</div></div>
-    <div class="stat"><div class="k">Jitter</div><div class="v sm" id="s-jit">&mdash;</div></div>
-    <div class="stat"><div class="k">Total pings</div><div class="v" id="s-total">0</div></div>
-    <div class="stat loss"><div class="k">Packet loss</div><div class="v" id="s-loss">0.0%</div></div>
-  </div>
+  <!-- ==================== PING ==================== -->
+  <section class="card" id="ping">
+    <h2>Ping <span class="dot" id="ping-dot"></span></h2>
+    <div class="sub">HTTPS round-trip time to a cloud region. A request that errors or doesn't
+      answer within 2&nbsp;s counts as a lost packet.</div>
 
-  <div class="panel graph">
-    <div class="cap">
-      <span>RTT &middot; ms</span>
-      <span class="legend">
-        <span><i style="background:#7dcfff"></i>RTT</span>
-        <span><i style="background:#ff6ad5"></i>avg / loss</span>
-      </span>
+    <div class="providers">
+      <div class="prov">
+        <span class="ph">AWS</span>
+        <button class="btn sm reg" data-t="aws-e">East</button>
+        <button class="btn sm reg" data-t="aws-w">West</button>
+      </div>
+      <div class="prov">
+        <span class="ph">Azure</span>
+        <button class="btn sm reg" data-t="az-e">East</button>
+        <button class="btn sm reg" data-t="az-w">West</button>
+      </div>
+      <div class="prov">
+        <span class="ph">Google</span>
+        <button class="btn sm reg" data-t="gc-e">East</button>
+        <button class="btn sm reg" data-t="gc-w">West</button>
+      </div>
     </div>
-    <canvas id="c"></canvas>
-  </div>
+
+    <div class="row">
+      <label class="fld grow">custom host / ip
+        <input class="host" id="ping-custom" type="text" placeholder="e.g. 1.1.1.1" spellcheck="false" autocomplete="off">
+      </label>
+      <button class="btn" id="ping-use">Use</button>
+    </div>
+
+    <div class="row">
+      <button class="btn go" id="ping-toggle">Start</button>
+      <button class="btn" id="ping-clear">Clear</button>
+      <button class="btn" id="ping-csv" disabled>Export CSV (60&nbsp;s)</button>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="k">Target</div><div class="v sm" id="s-target">&mdash;</div></div>
+      <div class="stat"><div class="k">Last</div><div class="v" id="s-last">&mdash;</div></div>
+      <div class="stat"><div class="k">Min/Avg/Max</div><div class="v sm" id="s-mam">&mdash;</div></div>
+      <div class="stat"><div class="k">Jitter</div><div class="v sm" id="s-jit">&mdash;</div></div>
+      <div class="stat"><div class="k">Total</div><div class="v" id="s-total">0</div></div>
+      <div class="stat loss"><div class="k">Loss</div><div class="v" id="s-loss">0.0%</div></div>
+    </div>
+
+    <div class="gbox">
+      <div class="cap">
+        <span id="cap-l">idle</span>
+        <span class="legend">
+          <span><i style="background:#7dcfff"></i>RTT</span>
+          <span><i style="background:#ff6ad5"></i>avg / loss</span>
+        </span>
+      </div>
+      <canvas id="c"></canvas>
+    </div>
+  </section>
+
+  <!-- ==================== TRACEROUTE ==================== -->
+  <section class="card" id="trace">
+    <h2>Traceroute <span class="dot" id="trace-dot"></span></h2>
+    <div class="sub">Runs from a Globalping probe &mdash; a browser can't send trace probes itself.
+      Roughly 250&nbsp;runs/hour per IP, unauthenticated.</div>
+
+    <div class="row">
+      <label class="fld grow">target host / ip
+        <input class="host" id="trace-target" type="text" placeholder="e.g. github.com" spellcheck="false" autocomplete="off">
+      </label>
+      <label class="fld">max hops
+        <input class="hops" id="trace-hops" type="number" min="1" max="20" value="20">
+      </label>
+    </div>
+    <div class="row">
+      <label class="fld from">probe location
+        <input class="from" id="trace-from" type="text" value="US" placeholder="US, New York, us-east-1&hellip;" spellcheck="false" autocomplete="off">
+      </label>
+      <label class="fld">protocol
+        <select id="trace-proto">
+          <option>ICMP</option><option>TCP</option><option>UDP</option>
+        </select>
+      </label>
+    </div>
+    <div class="row">
+      <button class="btn go" id="trace-run">Run</button>
+      <button class="btn" id="trace-csv" disabled>Export CSV</button>
+    </div>
+
+    <div class="out" id="trace-out"><div class="meta">no trace yet.</div></div>
+  </section>
+
+  <!-- ==================== DNS ==================== -->
+  <section class="card" id="dns">
+    <h2>DNS lookup <span class="dot" id="dns-dot"></span></h2>
+    <div class="sub">Resolved over DNS-over-HTTPS from your browser.</div>
+
+    <div class="row">
+      <label class="fld grow">name
+        <input class="host" id="dns-name" type="text" placeholder="e.g. example.com" spellcheck="false" autocomplete="off">
+      </label>
+      <label class="fld">type
+        <select id="dns-type">
+          <option>A</option><option>AAAA</option><option>CNAME</option><option>MX</option>
+          <option>TXT</option><option>NS</option><option>SOA</option><option>CAA</option>
+          <option>PTR</option><option>SRV</option>
+        </select>
+      </label>
+      <label class="fld">resolver
+        <select id="dns-resolver">
+          <option value="cloudflare">Cloudflare</option>
+          <option value="google">Google</option>
+        </select>
+      </label>
+    </div>
+    <div class="row">
+      <button class="btn go" id="dns-run">Lookup</button>
+    </div>
+
+    <div class="out" id="dns-out"><div class="meta">no query yet.</div></div>
+  </section>
+
 </div>
 
 <footer>
-  <span id="foot">Idle.</span> &nbsp;&middot;&nbsp;
   <a href="https://github.com/Vybenclave/browser-netstats">github.com/Vybenclave/browser-netstats</a>
 </footer>
 
@@ -121,67 +255,82 @@
 (() => {
   "use strict";
 
-  // One reachable HTTPS endpoint per AWS US region. They answer fast and
-  // don't need CORS because we only time an opaque (no-cors) request.
-  const TARGETS = [
-    { id:"us-east-1", label:"US East · N. Virginia",   host:"s3.us-east-1.amazonaws.com" },
-    { id:"us-east-2", label:"US East · Ohio",          host:"s3.us-east-2.amazonaws.com" },
-    { id:"us-west-1", label:"US West · N. California",  host:"s3.us-west-1.amazonaws.com" },
-    { id:"us-west-2", label:"US West · Oregon",         host:"s3.us-west-2.amazonaws.com" },
-  ];
-  const INTERVAL = 500;    // ms between pings
-  const TIMEOUT  = 2000;   // ms before a ping counts as lost
-  const MAXBARS  = 120;    // history kept on screen (~1 min)
-  const AVG_WIN  = 8;      // samples in the rolling-average line
-
   const $ = s => document.querySelector(s);
-  const targetsEl = $("#targets");
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+  const slug = s => String(s).replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "host";
+  const stamp = () => new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+
+  function downloadCSV(name, rows) {
+    const cell = v => {
+      v = v === null || v === undefined ? "" : String(v);
+      return /[",\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+    };
+    const csv = rows.map(r => r.map(cell).join(",")).join("\r\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+
+  // =====================================================================
+  //  PING  -- timed HTTPS round-trip, from this browser
+  // =====================================================================
+  const TARGETS = {
+    "aws-e": { label:"AWS · us-east-1",   host:"dynamodb.us-east-1.amazonaws.com" },
+    "aws-w": { label:"AWS · us-west-2",   host:"dynamodb.us-west-2.amazonaws.com" },
+    "az-e":  { label:"Azure · East US",   host:"eastus.api.cognitive.microsoft.com" },
+    "az-w":  { label:"Azure · West US",   host:"westus.api.cognitive.microsoft.com" },
+    "gc-e":  { label:"Google · us-east1", host:"us-east1-aiplatform.googleapis.com" },
+    "gc-w":  { label:"Google · us-west1", host:"us-west1-aiplatform.googleapis.com" },
+  };
+  const INTERVAL = 500;     // ms between pings
+  const TIMEOUT  = 2000;    // ms before a ping counts as lost
+  const MAXBARS  = 120;     // bars on screen (~1 min)
+  const CSV_WINDOW = 60000; // ms of history kept for the CSV export
+  const AVG_WIN  = 8;       // samples in the rolling-average line
+
   const canvas = $("#c");
   const ctx = canvas.getContext("2d");
 
-  let current = TARGETS[0];
-  let timer = null;
-  let running = false;
-
-  const samples = [];       // { rtt: number | null }  -- null = lost
+  let current = TARGETS["aws-e"];
+  let timer = null, running = false;
+  const samples = [];       // { rtt:number|null, t:number }  -- on screen
+  const csvLog = [];        // { rtt:number|null, t:number }  -- last 60 s
   let total = 0, lost = 0, sum = 0, okCount = 0;
   let min = Infinity, max = 0;
   let lastRtt = null, prevRtt = null, jitter = 0;
 
-  // ---- target buttons ----
-  TARGETS.forEach(t => {
-    const b = document.createElement("button");
-    b.textContent = t.label;
-    b.dataset.id = t.id;
-    b.addEventListener("click", () => selectTarget(t));
-    targetsEl.appendChild(b);
+  [...document.querySelectorAll("#ping .reg")].forEach(b => {
+    b.addEventListener("click", () => selectTarget(TARGETS[b.dataset.t], b.dataset.t));
   });
 
-  function selectTarget(t) {
+  function selectTarget(t, key) {
     current = t;
-    const known = TARGETS.some(x => x.id === t.id);
-    [...targetsEl.children].forEach(b => b.classList.toggle("active", known && b.dataset.id === t.id));
-    if (known) $("#custom").value = "";
+    [...document.querySelectorAll("#ping .reg")].forEach(b => b.classList.toggle("on", b.dataset.t === key));
+    if (key) $("#ping-custom").value = "";
     $("#s-target").textContent = t.label;
     resetStats();
+    setCap();
   }
-
   function useCustom() {
-    let h = $("#custom").value.trim().replace(/^https?:\/\//i, "").replace(/\/.*$/, "");
+    const h = $("#ping-custom").value.trim().replace(/^https?:\/\//i, "").replace(/\/.*$/, "");
     if (!h) return;
-    selectTarget({ id:"custom:" + h, label:h, host:h });
+    selectTarget({ label:h, host:h }, null);
   }
-
   function resetStats() {
-    samples.length = 0;
+    samples.length = 0; csvLog.length = 0;
     total = lost = sum = okCount = 0;
     min = Infinity; max = 0;
     lastRtt = prevRtt = null; jitter = 0;
-    updateStats();
-    render();
+    $("#ping-csv").disabled = true;
+    updateStats(); render();
   }
 
-  // ---- the probe ----
   async function ping(host) {
     const url = "https://" + host + "/?_bnt=" + Date.now();
     const ac = new AbortController();
@@ -191,7 +340,7 @@
       await fetch(url, { mode:"no-cors", cache:"no-store", signal:ac.signal });
       return performance.now() - start;
     } catch (_) {
-      return null;                       // aborted or network error -> lost
+      return null;
     } finally {
       clearTimeout(to);
     }
@@ -200,78 +349,78 @@
   async function tick() {
     const host = current.host;
     const rtt = await ping(host);
-    if (current.host !== host) return;   // target switched mid-flight
+    if (current.host !== host) return;   // switched mid-flight
 
+    const now = Date.now();
     total++;
     if (rtt === null) {
-      lost++;
-      lastRtt = null;
-      samples.push({ rtt:null });
+      lost++; lastRtt = null;
+      samples.push({ rtt:null, t:now });
+      csvLog.push({ rtt:null, t:now });
     } else {
       okCount++; sum += rtt;
       if (rtt < min) min = rtt;
       if (rtt > max) max = rtt;
       if (prevRtt !== null) jitter += (Math.abs(rtt - prevRtt) - jitter) / Math.min(okCount, 16);
-      prevRtt = rtt;
-      lastRtt = rtt;
-      samples.push({ rtt });
+      prevRtt = rtt; lastRtt = rtt;
+      samples.push({ rtt, t:now });
+      csvLog.push({ rtt, t:now });
     }
     if (samples.length > MAXBARS) samples.shift();
-    updateStats();
-    render();
+    while (csvLog.length && now - csvLog[0].t > CSV_WINDOW) csvLog.shift();
+    $("#ping-csv").disabled = csvLog.length === 0;
+    updateStats(); render();
   }
 
+  function setCap() {
+    $("#cap-l").textContent = (running ? "● " : "") + current.label +
+      (running ? "  ·  every " + INTERVAL + " ms" : "  ·  idle");
+  }
   function start() {
     if (running) return;
     running = true;
-    $("#toggle").textContent = "Stop";
-    $("#toggle").classList.add("stop");
-    $("#foot").textContent = "Pinging " + current.label + " every " + INTERVAL + " ms…";
+    $("#ping-toggle").textContent = "Stop";
+    $("#ping-toggle").classList.add("stop");
+    $("#ping-dot").classList.add("live");
+    setCap();
     tick();
     timer = setInterval(tick, INTERVAL);
   }
-
   function stop() {
     running = false;
-    clearInterval(timer);
-    timer = null;
-    $("#toggle").textContent = "Start";
-    $("#toggle").classList.remove("stop");
-    $("#foot").textContent = "Stopped.";
+    clearInterval(timer); timer = null;
+    $("#ping-toggle").textContent = "Start";
+    $("#ping-toggle").classList.remove("stop");
+    $("#ping-dot").classList.remove("live");
+    setCap();
   }
 
-  // ---- stats readout ----
   function fmtN(x) {
     if (x === null || !isFinite(x)) return "—";
     return x < 10 ? x.toFixed(1) : String(Math.round(x));
   }
-  function fmt(x) {
-    return x === null || !isFinite(x) ? "—" : fmtN(x) + " ms";
-  }
+  const fmt = x => (x === null || !isFinite(x)) ? "—" : fmtN(x) + " ms";
 
   function updateStats() {
     const last = $("#s-last");
-    last.textContent = lastRtt === null && total ? "LOST" : fmt(lastRtt);
-    last.style.color = lastRtt === null && total ? "var(--magenta)" : "var(--cyan)";
+    last.textContent = (lastRtt === null && total) ? "LOST" : fmt(lastRtt);
+    last.style.color = (lastRtt === null && total) ? "var(--magenta)" : "var(--cyan)";
     $("#s-mam").textContent   = okCount ? fmtN(min) + " / " + fmtN(sum / okCount) + " / " + fmtN(max) + " ms" : "—";
     $("#s-jit").textContent   = okCount > 1 ? fmt(jitter) : "—";
     $("#s-total").textContent = total;
     $("#s-loss").textContent  = (total ? lost / total * 100 : 0).toFixed(1) + "%";
   }
 
-  // ---- graph ----
   function niceMax(v) {
     const steps = [50,100,150,200,300,400,500,750,1000,1500,2000];
     for (const s of steps) if (v <= s) return s;
     return Math.ceil(v / 1000) * 1000;
   }
-
   function render() {
     const dpr = window.devicePixelRatio || 1;
     const w = canvas.clientWidth, h = canvas.clientHeight;
     if (!w || !h) return;
-    canvas.width = w * dpr;
-    canvas.height = h * dpr;
+    canvas.width = w * dpr; canvas.height = h * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
 
@@ -280,7 +429,6 @@
 
     const okv = [];
     for (const s of samples) if (s.rtt !== null) okv.push(s.rtt);
-    // scale to the 95th percentile so one TLS-warmup spike doesn't flatten the rest
     let scaleMax = 50;
     if (okv.length) {
       const sorted = okv.slice().sort((a, b) => a - b);
@@ -288,24 +436,19 @@
       scaleMax = niceMax(Math.max(50, p95));
     }
 
-    // grid + y-axis labels (25% grey)
     ctx.font = "9px ui-monospace, monospace";
     ctx.textBaseline = "middle";
     const rows = gh < 120 ? 2 : 4;
     for (let i = 0; i <= rows; i++) {
       const y = padT + gh * (i / rows);
       ctx.strokeStyle = "#404040";
-      ctx.globalAlpha = i === rows ? 0.65 : 0.35;
-      ctx.beginPath();
-      ctx.moveTo(padL, y);
-      ctx.lineTo(w - padR, y);
-      ctx.stroke();
+      ctx.globalAlpha = i === rows ? 0.7 : 0.4;
+      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(w - padR, y); ctx.stroke();
       ctx.globalAlpha = 1;
-      ctx.fillStyle = "#565f89";
+      ctx.fillStyle = "#9aa5ce";
       ctx.fillText(Math.round(scaleMax * (1 - i / rows)), 6, y);
     }
 
-    // per-ping vertical bars
     const n = samples.length;
     const slot = gw / MAXBARS;
     const bw = Math.max(1, Math.min(4, slot * 0.65));
@@ -313,8 +456,7 @@
       const s = samples[i];
       const x = padL + gw - (n - i) * slot + (slot - bw) / 2;
       if (s.rtt === null) {
-        ctx.fillStyle = "#ff6ad5";
-        ctx.globalAlpha = 0.85;
+        ctx.fillStyle = "#ff6ad5"; ctx.globalAlpha = 0.85;
         ctx.fillRect(x, padT, bw, gh);
         ctx.globalAlpha = 1;
       } else {
@@ -324,21 +466,15 @@
       }
     }
 
-    // rolling-average line (magenta)
     if (okv.length > 1) {
-      ctx.strokeStyle = "#ff6ad5";
-      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = "#ff6ad5"; ctx.lineWidth = 1.5;
       ctx.beginPath();
-      const acc = [];
-      let started = false;
+      const acc = []; let started = false;
       for (let i = 0; i < n; i++) {
         const s = samples[i];
         if (s.rtt === null) continue;
-        acc.push(s.rtt);
-        if (acc.length > AVG_WIN) acc.shift();
-        let a = 0;
-        for (const v of acc) a += v;
-        a /= acc.length;
+        acc.push(s.rtt); if (acc.length > AVG_WIN) acc.shift();
+        let a = 0; for (const v of acc) a += v; a /= acc.length;
         const x = padL + gw - (n - i) * slot + slot / 2;
         const y = padT + gh - gh * Math.min(1, a / scaleMax);
         started ? ctx.lineTo(x, y) : (ctx.moveTo(x, y), started = true);
@@ -346,24 +482,205 @@
       ctx.stroke();
     }
 
-    // baseline
-    ctx.strokeStyle = "#404040";
-    ctx.globalAlpha = 0.65;
-    ctx.beginPath();
-    ctx.moveTo(padL, padT + gh);
-    ctx.lineTo(w - padR, padT + gh);
-    ctx.stroke();
+    ctx.strokeStyle = "#404040"; ctx.globalAlpha = 0.7;
+    ctx.beginPath(); ctx.moveTo(padL, padT + gh); ctx.lineTo(w - padR, padT + gh); ctx.stroke();
     ctx.globalAlpha = 1;
   }
 
-  // ---- wiring ----
-  window.addEventListener("resize", render);
-  $("#toggle").addEventListener("click", () => (running ? stop() : start()));
-  $("#clear").addEventListener("click", resetStats);
-  $("#useCustom").addEventListener("click", useCustom);
-  $("#custom").addEventListener("keydown", e => { if (e.key === "Enter") useCustom(); });
+  function exportPingCSV() {
+    if (!csvLog.length) return;
+    const rows = [["unix_ms", "iso_time", "target", "rtt_ms", "status"]];
+    for (const s of csvLog) {
+      rows.push([
+        s.t, new Date(s.t).toISOString(), current.host,
+        s.rtt === null ? "" : s.rtt.toFixed(2),
+        s.rtt === null ? "lost" : "ok",
+      ]);
+    }
+    downloadCSV("ping_" + slug(current.host) + "_" + stamp() + ".csv", rows);
+  }
 
-  selectTarget(TARGETS[0]);
+  $("#ping-toggle").addEventListener("click", () => running ? stop() : start());
+  $("#ping-clear").addEventListener("click", resetStats);
+  $("#ping-csv").addEventListener("click", exportPingCSV);
+  $("#ping-use").addEventListener("click", useCustom);
+  $("#ping-custom").addEventListener("keydown", e => { if (e.key === "Enter") useCustom(); });
+  window.addEventListener("resize", render);
+
+  // =====================================================================
+  //  GLOBALPING  -- shared client for probe-run measurements
+  // =====================================================================
+  const GP = "https://api.globalping.io/v1/measurements";
+
+  async function globalping(type, target, measurementOptions, magic) {
+    const body = { type, target, limit: 1, measurementOptions };
+    if (magic) body.locations = [{ magic }];
+    const r = await fetch(GP, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) {
+      let msg = r.status + " " + r.statusText;
+      try { const j = await r.json(); if (j && j.error && j.error.message) msg = j.error.message; } catch (_) {}
+      throw new Error(msg);
+    }
+    const { id } = await r.json();
+    const deadline = Date.now() + 30000;
+    while (Date.now() < deadline) {
+      await sleep(700);
+      const g = await fetch(GP + "/" + id);
+      if (!g.ok) continue;
+      const data = await g.json();
+      if (data.status !== "in-progress") {
+        const first = data.results && data.results[0];
+        if (!first) throw new Error("no probe returned a result");
+        const out = first.result || {};
+        out._probe = first.probe || null;
+        return out;
+      }
+    }
+    throw new Error("timed out waiting for the probe");
+  }
+
+  // =====================================================================
+  //  TRACEROUTE
+  // =====================================================================
+  let lastTrace = null;
+  const traceOut = $("#trace-out");
+
+  function setTraceBusy(on, note) {
+    $("#trace-run").disabled = on;
+    $("#trace-dot").classList.toggle("busy", on);
+    if (note) traceOut.innerHTML = '<div class="meta">' + esc(note) + "</div>";
+  }
+
+  async function runTrace() {
+    const target = $("#trace-target").value.trim().replace(/^https?:\/\//i, "").replace(/\/.*$/, "");
+    if (!target) return;
+    const maxHops = clamp(parseInt($("#trace-hops").value, 10) || 20, 1, 20);
+    const from = $("#trace-from").value.trim() || "US";
+    const protocol = $("#trace-proto").value;
+
+    setTraceBusy(true, "tracing " + target + " from " + from + " …");
+    try {
+      const res = await globalping("traceroute", target, { protocol }, from);
+      lastTrace = {
+        target, from, protocol,
+        probe: res._probe,
+        hops: (res.hops || []).slice(0, maxHops),
+        raw: res.rawOutput || "",
+      };
+      renderTrace(lastTrace);
+      $("#trace-csv").disabled = lastTrace.hops.length === 0;
+    } catch (e) {
+      traceOut.innerHTML = '<div class="meta err">Error: ' + esc(e.message) + "</div>";
+      $("#trace-csv").disabled = true;
+    } finally {
+      setTraceBusy(false);
+    }
+  }
+
+  function probeLabel(p, fallback) {
+    if (!p) return fallback;
+    const where = [p.city, p.country].filter(Boolean).join(", ");
+    return where + (p.network ? "  ·  " + p.network : "");
+  }
+
+  function renderTrace(t) {
+    let html = '<div class="meta">probe: ' + esc(probeLabel(t.probe, t.from)) +
+               "  ·  " + t.hops.length + " hop" + (t.hops.length === 1 ? "" : "s") + "</div>";
+    html += '<table class="tbl"><thead><tr><th>#</th><th>host</th><th>ip</th><th>rtt (ms)</th></tr></thead><tbody>';
+    t.hops.forEach((h, i) => {
+      const rtts = (h.timings || []).map(x => x.rtt).filter(v => typeof v === "number");
+      const best = rtts.length ? Math.min.apply(null, rtts).toFixed(1) : "*";
+      const ip = h.resolvedAddress && h.resolvedAddress !== "*" ? h.resolvedAddress : "*";
+      const host = h.resolvedHostname && h.resolvedHostname !== h.resolvedAddress ? h.resolvedHostname : "";
+      html += "<tr><td>" + (i + 1) + "</td><td>" + esc(host || "—") + "</td><td>" +
+              esc(ip) + "</td><td>" + best + "</td></tr>";
+    });
+    html += "</tbody></table>";
+    if (t.raw) html += '<pre class="raw">' + esc(t.raw.trim()) + "</pre>";
+    traceOut.innerHTML = html;
+  }
+
+  function exportTraceCSV() {
+    if (!lastTrace) return;
+    const rows = [["hop", "hostname", "ip", "rtt1_ms", "rtt2_ms", "rtt3_ms"]];
+    lastTrace.hops.forEach((h, i) => {
+      const r = (h.timings || []).map(x => x.rtt);
+      rows.push([
+        i + 1,
+        h.resolvedHostname || "",
+        h.resolvedAddress || "",
+        r[0] === undefined ? "" : r[0],
+        r[1] === undefined ? "" : r[1],
+        r[2] === undefined ? "" : r[2],
+      ]);
+    });
+    downloadCSV("traceroute_" + slug(lastTrace.target) + "_" + stamp() + ".csv", rows);
+  }
+
+  $("#trace-run").addEventListener("click", runTrace);
+  $("#trace-csv").addEventListener("click", exportTraceCSV);
+  $("#trace-target").addEventListener("keydown", e => { if (e.key === "Enter") runTrace(); });
+
+  // =====================================================================
+  //  DNS  -- DNS-over-HTTPS, straight from the browser
+  // =====================================================================
+  const TYPE_BY_NUM = { 1:"A", 2:"NS", 5:"CNAME", 6:"SOA", 12:"PTR", 15:"MX", 16:"TXT", 28:"AAAA", 33:"SRV", 257:"CAA" };
+  const RCODE = { 0:"NOERROR", 1:"FORMERR", 2:"SERVFAIL", 3:"NXDOMAIN", 5:"REFUSED" };
+  const dnsOut = $("#dns-out");
+
+  async function runDns() {
+    const name = $("#dns-name").value.trim().replace(/^https?:\/\//i, "").replace(/\/.*$/, "");
+    if (!name) return;
+    const type = $("#dns-type").value;
+    const google = $("#dns-resolver").value === "google";
+    const url = (google
+      ? "https://dns.google/resolve?name=" + encodeURIComponent(name) + "&type=" + type
+      : "https://cloudflare-dns.com/dns-query?name=" + encodeURIComponent(name) + "&type=" + type);
+
+    $("#dns-run").disabled = true;
+    $("#dns-dot").classList.add("busy");
+    dnsOut.innerHTML = '<div class="meta">querying ' + (google ? "Google" : "Cloudflare") + " …</div>";
+    const t0 = performance.now();
+    try {
+      const r = await fetch(url, { headers: { accept: "application/dns-json" } });
+      const j = await r.json();
+      renderDns(j, google ? "Google · 8.8.8.8" : "Cloudflare · 1.1.1.1",
+                (performance.now() - t0).toFixed(0), type);
+    } catch (e) {
+      dnsOut.innerHTML = '<div class="meta err">Error: ' + esc(e.message) + "</div>";
+    } finally {
+      $("#dns-run").disabled = false;
+      $("#dns-dot").classList.remove("busy");
+    }
+  }
+
+  function renderDns(j, resolver, ms, qtype) {
+    const ans = j.Answer || [];
+    let html = '<div class="meta">' + esc(resolver) + "  ·  " +
+               (RCODE[j.Status] || ("status " + j.Status)) + "  ·  " + ms + " ms  ·  " +
+               ans.length + " answer" + (ans.length === 1 ? "" : "s") + "</div>";
+    if (ans.length) {
+      html += '<table class="tbl"><thead><tr><th>name</th><th>type</th><th>ttl</th><th>data</th></tr></thead><tbody>';
+      ans.forEach(a => {
+        html += "<tr><td>" + esc(a.name) + "</td><td>" + esc(TYPE_BY_NUM[a.type] || a.type) +
+                "</td><td>" + a.TTL + "</td><td>" + esc(a.data) + "</td></tr>";
+      });
+      html += "</tbody></table>";
+    } else {
+      html += '<div class="meta">no ' + esc(qtype) + " records</div>";
+    }
+    dnsOut.innerHTML = html;
+  }
+
+  $("#dns-run").addEventListener("click", runDns);
+  $("#dns-name").addEventListener("keydown", e => { if (e.key === "Enter") runDns(); });
+
+  // ---- init ----
+  selectTarget(TARGETS["aws-e"], "aws-e");
   render();
 })();
 </script>
