@@ -53,10 +53,13 @@ These run entirely from the browser:
   right edge, scrolling left; download grows down from the centre line (cyan),
   upload grows up at the same slots (magenta), mirrored. **Bufferbloat** grade
   = loaded median RTT − idle median (measured, not drawn). Fast links stop at
-  ~1.6 GB each way. Every run is appended to a **log** in `localStorage` - last 8
-  in a table, **Share log** exports CSV (`iso_time, down_mbps, up_mbps,
-  latency_idle_ms, latency_loaded_ms, bufferbloat_ms, jitter_ms, cf_edge`),
-  **Clear log** wipes it.
+  ~1.6 GB each way. A **Monitor** button above the graph runs 10 quick passes
+  (8 s each way, a quarter of the data cap) one every 30 s and turns into
+  **Stop**; pressing it while a manual run is in flight discards that run and
+  resets the graph. Every run is appended to a **log** in `localStorage` - last
+  8 in a table (`q` = monitor pass), **Share log** exports CSV (`iso_time, mode,
+  down_mbps, up_mbps, latency_idle_ms, latency_loaded_ms, bufferbloat_ms,
+  jitter_ms, cf_edge`), **Clear log** wipes it.
 - **NAT type** - `RTCPeerConnection` against Google + Cloudflare STUN: public
   IP, whether outbound UDP works at all, and cone vs **symmetric** NAT (compares
   the mapped port from each STUN server). Local host candidates are mDNS-hidden

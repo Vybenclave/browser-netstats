@@ -135,7 +135,10 @@
   .stat.loss .v{color:var(--magenta)}
 
   .gbox{margin-top:12px;background:var(--field);border:1px solid var(--border);border-radius:8px;padding:8px}
-  .gbox .cap{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--dim)}
+  .gbox .cap{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;font-size:11px;color:var(--dim)}
+  .gbox .cap-r{display:flex;align-items:center;gap:10px;flex:none}
+  #bw-mon{padding:3px 9px;font-size:11px}
+  #bw-mon.stop{border-color:var(--red);color:var(--red)}
   canvas{width:100%;height:100px;display:block}
   .legend{display:flex;gap:12px}
   .legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:middle}
@@ -232,7 +235,8 @@
     <div class="sub">Down/up throughput to the nearest Cloudflare edge, sustained ~20&nbsp;s each way
       so the number is representative, not a burst. Live scrolling bar trace (download down from the
       centre, upload mirrored above). Fast links stop at ~1.6&nbsp;GB each way &mdash; mind mobile
-      data. Every run is logged.</div>
+      data. Every run is logged. <b>Monitor</b> (above the graph) fires 10 quick passes at a
+      quarter of the data cap, one every 30&nbsp;s; the button turns into Stop.</div>
     <div class="row">
       <button class="btn go" id="bw-run">Run test</button>
       <button class="btn" id="bw-clear">Clear log</button>
@@ -241,9 +245,12 @@
     <div class="gbox">
       <div class="cap">
         <span id="bw-cap">idle</span>
-        <span class="legend">
-          <span><i style="background:#7dcfff"></i>down</span>
-          <span><i style="background:#ff6ad5"></i>up</span>
+        <span class="cap-r">
+          <span class="legend">
+            <span><i style="background:#7dcfff"></i>down</span>
+            <span><i style="background:#ff6ad5"></i>up</span>
+          </span>
+          <button class="btn sm" id="bw-mon">Monitor 10x</button>
         </span>
       </div>
       <canvas id="bwc"></canvas>
@@ -1003,13 +1010,17 @@
   // ---- bandwidth: live bar trace + run log ----
   const BW = {
     streams: 4, upStreams: 3,
-    downMs: 20000, upMs: 20000,        // sustained, not a burst
+    downMs: 20000, upMs: 20000,        // sustained standalone test
     downCap: 1600e6, upCap: 1600e6,    // hard data ceilings (fast links stop early)
+    quickMs: 8000,                     // per-direction time box for a Monitor run
+    monRuns: 10, monEveryMs: 30000,    // Monitor: 10 runs, one every 30 s
     upBlob: 8e6, latMs: 300, sampleMs: 250, warmup: 3,
   };
   const bwc = $("#bwc"), bwx = bwc.getContext("2d");
-  let bwTrace = null;   // { down:[[s,mbps]], up:[[s,mbps]], lat:[[s,ms]], phase }
+  let bwTrace = null;   // { down:[[s,mbps]], up:[[s,mbps]], phase }
   let lastBw = null;
+  let bwRunning = false, bwCancel = false, bwMon = null;   // bwMon: {i,n} while monitoring
+  const bwMonLabel = () => bwMon ? bwMon.i + "/" + bwMon.n : "";
   let bwLog = [];
   try { bwLog = JSON.parse(localStorage.getItem("bnt.bwlog") || "[]"); } catch (_) { bwLog = []; }
   try { bwTrace = JSON.parse(localStorage.getItem("bnt.bwtrace") || "null"); } catch (_) {}
@@ -1094,8 +1105,9 @@
         (bwLog.length === 1 ? "" : "s") + "</div>";
       html += '<table class="tbl"><thead><tr><th>when</th><th>down</th><th>up</th><th>bloat</th></tr></thead><tbody>' +
         bwLog.slice(-8).reverse().map(r =>
-          "<tr><td>" + new Date(r.t).toLocaleString() + "</td><td>" + fix(r.down) + "</td><td>" +
-          fix(r.up) + "</td><td>" + fix(r.bloat, 0) + " ms</td></tr>").join("") + "</tbody></table>";
+          "<tr><td>" + new Date(r.t).toLocaleString() + (r.quick ? " &middot; q" : "") + "</td><td>" +
+          fix(r.down) + "</td><td>" + fix(r.up) + "</td><td>" + fix(r.bloat, 0) + " ms</td></tr>").join("") +
+        "</tbody></table>";
     }
     $("#bw-out").innerHTML = html;
   }
@@ -1105,7 +1117,7 @@
     return v.length >= 3 ? v.reduce((a, b) => a + b, 0) / v.length : NaN;
   };
 
-  async function bwDownload(trace) {
+  async function bwDownload(trace, cfg) {
     const ac = new AbortController();
     let total = 0, prev = 0, prevT = 0;
     const started = performance.now();
@@ -1119,7 +1131,7 @@
             const { done, value } = await rd.read();
             if (done) break;                       // stream finished, loop grabs another
             total += value.length;
-            if (total >= BW.downCap) { ac.abort(); return; }
+            if (total >= cfg.cap) { ac.abort(); return; }
           }
         } catch (_) { return; }                     // aborted
       }
@@ -1134,21 +1146,22 @@
       const v = await bwPing();
       if (v != null) trace.loadedLat.push(v);
     }, BW.latMs);
-    const stop = setTimeout(() => ac.abort(), BW.downMs);
+    const cancelW = setInterval(() => { if (bwCancel) ac.abort(); }, 150);
+    const stop = setTimeout(() => ac.abort(), cfg.ms);
     await Promise.all(Array.from({ length: BW.streams }, pump));
-    clearInterval(sampler); clearInterval(latLoop); clearTimeout(stop);
+    clearInterval(sampler); clearInterval(latLoop); clearInterval(cancelW); clearTimeout(stop);
     const secs = (performance.now() - started) / 1000;
     return { bytes: total, secs, overall: mbps(total, secs * 1000) };
   }
 
-  async function bwUpload(trace, tOffsetS) {
+  async function bwUpload(trace, tOffsetS, cfg) {
     let total = 0, prev = 0, prevT = 0;
     const started = performance.now();
     let stopped = false;
     const blob = new Blob([new Uint8Array(BW.upBlob)]);
     const stream = async () => {
       let sent = 0;
-      while (!stopped && total < BW.upCap) {
+      while (!stopped && total < cfg.cap) {
         await new Promise(res => {
           const xhr = new XMLHttpRequest();
           xhr.open("POST", "https://speed.cloudflare.com/__up");
@@ -1169,29 +1182,45 @@
       const v = await bwPing();
       if (v != null) trace.loadedLat.push(v);
     }, BW.latMs);
-    const stop = setTimeout(() => { stopped = true; }, BW.upMs);
+    const cancelW = setInterval(() => { if (bwCancel) stopped = true; }, 150);
+    const stop = setTimeout(() => { stopped = true; }, cfg.ms);
     await Promise.all(Array.from({ length: BW.upStreams }, stream));
-    clearInterval(sampler); clearInterval(latLoop); clearTimeout(stop);
+    clearInterval(sampler); clearInterval(latLoop); clearInterval(cancelW); clearTimeout(stop);
     const secs = (performance.now() - started) / 1000;
     return { bytes: total, secs, overall: mbps(total, secs * 1000) };
   }
 
-  async function bwRun() {
+  async function bwRun(opts) {
+    const quick = !!(opts && opts.quick);
+    const dCfg = { ms: quick ? BW.quickMs : BW.downMs, cap: BW.downCap / (quick ? 4 : 1) };
+    const uCfg = { ms: quick ? BW.quickMs : BW.upMs, cap: BW.upCap / (quick ? 4 : 1) };
+    bwRunning = true; bwCancel = false;
     busy("#bw-run", "#bw-dot", true);
     const trace = { down: [], up: [], loadedLat: [], phase: "idle" };
     bwTrace = trace;
+    const bail = () => {
+      trace.phase = "aborted";
+      bwRunning = false;
+      busy("#bw-run", "#bw-dot", false);
+      return null;
+    };
 
-    $("#bw-cap").textContent = "idle latency…";
+    $("#bw-cap").textContent = (quick ? "monitor " + bwMonLabel() + " · " : "") + "idle latency…";
     const idle = [];
-    for (let i = 0; i < 10; i++) { const v = await bwPing(); if (v != null) idle.push(v); }
+    for (let i = 0; i < 10 && !bwCancel; i++) { const v = await bwPing(); if (v != null) idle.push(v); }
+    if (bwCancel) return bail();
     const idleMed = median(idle);
     const jitter = idle.length > 1 ? Math.max(...idle) - Math.min(...idle) : NaN;
 
-    $("#bw-cap").textContent = "download…"; trace.phase = "download";
-    const dn = await bwDownload(trace);
+    $("#bw-cap").textContent = (quick ? "monitor " + bwMonLabel() + " · " : "") + "download…";
+    trace.phase = "download";
+    const dn = await bwDownload(trace, dCfg);
+    if (bwCancel) return bail();
 
-    $("#bw-cap").textContent = "upload…"; trace.phase = "upload";
-    const up = await bwUpload(trace, dn.secs);
+    $("#bw-cap").textContent = (quick ? "monitor " + bwMonLabel() + " · " : "") + "upload…";
+    trace.phase = "upload";
+    const up = await bwUpload(trace, dn.secs, uCfg);
+    if (bwCancel) return bail();
 
     // sustained rate = mean of samples past the warm-up ramp; fall back to bytes/time
     const downMbps = isFinite(stableAvg(trace.down, BW.warmup)) ? stableAvg(trace.down, BW.warmup) : dn.overall;
@@ -1211,21 +1240,24 @@
 
     trace.phase = "done";
     lastBw = { down: downMbps, up: upMbps, idle: idleMed, loaded: loadedMed, bloat, jitter, grade, edge,
-      downMB: dn.bytes / 1e6, upMB: up.bytes / 1e6 };
-    bwLog.push({ t: Date.now(), down: downMbps, up: upMbps, idle: idleMed, loaded: loadedMed, bloat, jitter, edge });
+      downMB: dn.bytes / 1e6, upMB: up.bytes / 1e6, quick };
+    bwLog.push({ t: Date.now(), down: downMbps, up: upMbps, idle: idleMed, loaded: loadedMed, bloat, jitter, edge, quick });
     bwSave();
-    $("#bw-cap").textContent = fix(downMbps) + " / " + fix(upMbps) + " Mbps  ·  bloat " + fix(bloat, 0) + " ms";
+    $("#bw-cap").textContent = (quick ? "monitor " + bwMonLabel() + " · " : "") +
+      fix(downMbps) + " / " + fix(upMbps) + " Mbps  ·  bloat " + fix(bloat, 0) + " ms";
     bwDraw();
     bwRenderOut();
     $("#bw-share").disabled = bwLog.length === 0;
+    bwRunning = false;
     busy("#bw-run", "#bw-dot", false);
+    return lastBw;
   }
 
   function bwReport() {
     if (!bwLog.length) return null;
     const csv = csvString([
-      ["iso_time", "down_mbps", "up_mbps", "latency_idle_ms", "latency_loaded_ms", "bufferbloat_ms", "jitter_ms", "cf_edge"],
-      ...bwLog.map(r => [new Date(r.t).toISOString(), fix(r.down, 2), fix(r.up, 2),
+      ["iso_time", "mode", "down_mbps", "up_mbps", "latency_idle_ms", "latency_loaded_ms", "bufferbloat_ms", "jitter_ms", "cf_edge"],
+      ...bwLog.map(r => [new Date(r.t).toISOString(), r.quick ? "monitor" : "full", fix(r.down, 2), fix(r.up, 2),
         fix(r.idle, 0), fix(r.loaded, 0), fix(r.bloat, 0), fix(r.jitter, 0), r.edge || ""]),
     ]);
     const b = lastBw || bwLog[bwLog.length - 1];
@@ -1249,8 +1281,49 @@
     return { base: "bandwidth-log_" + stamp(), title: "Bandwidth log", txt, csv };
   }
 
-  $("#bw-run").addEventListener("click", bwRun);
+  function bwButtons() {
+    const mon = !!bwMon;
+    $("#bw-mon").textContent = mon ? "Stop " + bwMonLabel() : "Monitor " + BW.monRuns + "x";
+    $("#bw-mon").classList.toggle("stop", mon);
+    $("#bw-run").disabled = mon;
+    $("#bw-clear").disabled = mon;
+  }
+  const wait = ms => new Promise(res => {
+    const end = performance.now() + ms;
+    const t = setInterval(() => { if (!bwMon || performance.now() >= end) { clearInterval(t); res(); } }, 200);
+  });
+
+  async function bwStartMonitor() {
+    bwMon = { i: 0, n: BW.monRuns };
+    bwButtons();
+    if (bwRunning) {                       // abort + discard the in-flight manual run
+      bwCancel = true;
+      while (bwRunning) await new Promise(r => setTimeout(r, 60));
+    }
+    if (!bwMon) return;                    // Stop pressed during the abort wait
+    bwTrace = null; lastBw = null; bwDraw();
+    for (let i = 1; i <= BW.monRuns && bwMon; i++) {
+      bwMon.i = i; bwButtons();
+      const t0 = performance.now();
+      await bwRun({ quick: true });
+      if (!bwMon) break;
+      if (i < BW.monRuns) await wait(Math.max(0, BW.monEveryMs - (performance.now() - t0)));
+    }
+    bwMon = null;
+    bwButtons();
+    if (!bwCancel) $("#bw-cap").textContent = "monitor done · " + bwLog.length + " runs logged";
+  }
+  function bwStopMonitor() {
+    bwMon = null;
+    bwCancel = true;
+    $("#bw-cap").textContent = "monitor stopped";
+    bwButtons();
+  }
+
+  $("#bw-run").addEventListener("click", () => { if (!bwRunning && !bwMon) bwRun(); });
+  $("#bw-mon").addEventListener("click", () => (bwMon ? bwStopMonitor() : bwStartMonitor()));
   $("#bw-clear").addEventListener("click", () => {
+    if (bwMon) return;
     bwLog = []; bwTrace = null; lastBw = null; bwSave();
     $("#bw-cap").textContent = "idle";
     $("#bw-share").disabled = true;
@@ -1259,6 +1332,7 @@
   makeShare("#bw-share", bwReport);
   addEventListener("resize", bwDraw);
   if (bwLog.length) { $("#bw-share").disabled = false; }
+  bwButtons();
   bwRenderOut();
   bwDraw();
 
