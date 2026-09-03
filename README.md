@@ -65,7 +65,7 @@ Edit the constants at the top of the `<script>` block in `index.html`:
 ```js
 const INTERVAL = 500;    // ms between pings
 const TIMEOUT  = 2000;   // ms before a ping counts as lost
-const MAXBARS  = 240;    // history kept on screen (~2 min)
+const MAXBARS  = 120;    // history kept on screen (~1 min)
 const AVG_WIN  = 8;      // samples in the rolling-average line
 ```
 

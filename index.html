@@ -40,7 +40,7 @@
   h1 .a{color:var(--cyan)}
   h1 .b{color:var(--magenta)}
   header p{margin:6px 0 0;font-size:12px;line-height:1.5;color:var(--muted);max-width:78ch}
-  .wrap{flex:1;display:flex;flex-direction:column;gap:14px;padding:14px 24px 20px;min-height:0}
+  .wrap{display:flex;flex-direction:column;gap:14px;padding:14px 24px 20px}
   .panel{background:var(--panel);border:1px solid var(--border);border-radius:10px}
   .controls{padding:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
   button{
@@ -58,16 +58,17 @@
     border:1px solid var(--border);border-radius:7px;padding:7px 10px;width:230px;
   }
   input[type=text]:focus{outline:none;border-color:var(--magenta)}
-  .stats{padding:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(124px,1fr));gap:10px}
-  .stat{background:var(--field);border:1px solid var(--border);border-radius:8px;padding:10px 12px}
+  .stats{padding:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+  .stat{background:var(--field);border:1px solid var(--border);border-radius:8px;padding:10px 12px;min-width:0}
   .stat .k{font-size:10px;text-transform:uppercase;letter-spacing:.13em;color:var(--muted)}
-  .stat .v{font-size:20px;margin-top:4px;color:var(--fg);white-space:nowrap}
-  .stat .v.sm{font-size:13px}
+  .stat .v{font-size:20px;margin-top:4px;color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .stat .v.sm{font-size:13px;white-space:normal}
   .stat.loss .v{color:var(--magenta)}
-  .graph{flex:1;position:relative;min-height:220px;padding:8px}
-  canvas{width:100%;height:100%;display:block}
-  .legend{position:absolute;right:16px;top:14px;font-size:11px;color:var(--muted);display:flex;gap:14px}
-  .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:middle}
+  .graph{align-self:flex-start;width:100%;max-width:500px;display:flex;flex-direction:column;gap:6px;padding:10px}
+  .graph .cap{display:flex;justify-content:space-between;align-items:center;font-size:10px;color:var(--muted)}
+  canvas{width:100%;height:100px;display:block}
+  .legend{display:flex;gap:12px}
+  .legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:middle}
   footer{padding:0 24px 18px;font-size:11px;color:var(--muted)}
   footer a{color:var(--blue)}
 </style>
@@ -100,9 +101,12 @@
   </div>
 
   <div class="panel graph">
-    <div class="legend">
-      <span><i style="background:#7dcfff"></i>RTT</span>
-      <span><i style="background:#ff6ad5"></i>rolling avg / loss</span>
+    <div class="cap">
+      <span>RTT &middot; ms</span>
+      <span class="legend">
+        <span><i style="background:#7dcfff"></i>RTT</span>
+        <span><i style="background:#ff6ad5"></i>avg / loss</span>
+      </span>
     </div>
     <canvas id="c"></canvas>
   </div>
@@ -127,7 +131,7 @@
   ];
   const INTERVAL = 500;    // ms between pings
   const TIMEOUT  = 2000;   // ms before a ping counts as lost
-  const MAXBARS  = 240;    // history kept on screen (~2 min)
+  const MAXBARS  = 120;    // history kept on screen (~1 min)
   const AVG_WIN  = 8;      // samples in the rolling-average line
 
   const $ = s => document.querySelector(s);
@@ -237,16 +241,19 @@
   }
 
   // ---- stats readout ----
-  function fmt(x) {
+  function fmtN(x) {
     if (x === null || !isFinite(x)) return "—";
-    return (x < 10 ? x.toFixed(1) : Math.round(x)) + " ms";
+    return x < 10 ? x.toFixed(1) : String(Math.round(x));
+  }
+  function fmt(x) {
+    return x === null || !isFinite(x) ? "—" : fmtN(x) + " ms";
   }
 
   function updateStats() {
     const last = $("#s-last");
     last.textContent = lastRtt === null && total ? "LOST" : fmt(lastRtt);
     last.style.color = lastRtt === null && total ? "var(--magenta)" : "var(--cyan)";
-    $("#s-mam").textContent   = okCount ? fmt(min) + " / " + fmt(sum / okCount) + " / " + fmt(max) : "—";
+    $("#s-mam").textContent   = okCount ? fmtN(min) + " / " + fmtN(sum / okCount) + " / " + fmtN(max) + " ms" : "—";
     $("#s-jit").textContent   = okCount > 1 ? fmt(jitter) : "—";
     $("#s-total").textContent = total;
     $("#s-loss").textContent  = (total ? lost / total * 100 : 0).toFixed(1) + "%";
@@ -268,18 +275,23 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
 
-    const padL = 46, padR = 10, padT = 12, padB = 18;
+    const padL = 44, padR = 10, padT = 8, padB = 14;
     const gw = w - padL - padR, gh = h - padT - padB;
 
     const okv = [];
     for (const s of samples) if (s.rtt !== null) okv.push(s.rtt);
-    const peak = okv.length ? Math.max.apply(null, okv) : 0;
-    const scaleMax = niceMax(Math.max(50, peak));
+    // scale to the 95th percentile so one TLS-warmup spike doesn't flatten the rest
+    let scaleMax = 50;
+    if (okv.length) {
+      const sorted = okv.slice().sort((a, b) => a - b);
+      const p95 = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))];
+      scaleMax = niceMax(Math.max(50, p95));
+    }
 
     // grid + y-axis labels (25% grey)
-    ctx.font = "10px ui-monospace, monospace";
+    ctx.font = "9px ui-monospace, monospace";
     ctx.textBaseline = "middle";
-    const rows = 4;
+    const rows = gh < 120 ? 2 : 4;
     for (let i = 0; i <= rows; i++) {
       const y = padT + gh * (i / rows);
       ctx.strokeStyle = "#404040";
@@ -296,7 +308,7 @@
     // per-ping vertical bars
     const n = samples.length;
     const slot = gw / MAXBARS;
-    const bw = Math.max(1, Math.min(6, slot * 0.7));
+    const bw = Math.max(1, Math.min(4, slot * 0.65));
     for (let i = 0; i < n; i++) {
       const s = samples[i];
       const x = padL + gw - (n - i) * slot + (slot - bw) / 2;
