@@ -110,7 +110,7 @@
   textarea:focus{outline:none;border-color:var(--magenta)}
   #tls-local-pane.drag{outline:1px dashed var(--cyan);outline-offset:5px;border-radius:8px}
   #tls-modes .btn.on{background:rgba(125,207,255,.14);border-color:var(--cyan);color:var(--cyan)}
-  #bwc{height:120px}
+  #bwc{height:140px}
   body.net-offline #tls-public-pane .offline-note{display:block}
 
   .stats{margin-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:8px}
@@ -268,9 +268,10 @@
   <!-- ==================== BANDWIDTH ==================== -->
   <section class="card" id="bw">
     <h2>Bandwidth <span class="dot" id="bw-dot"></span></h2>
-    <div class="sub">Down/up throughput to the nearest Cloudflare edge with a live trace, plus
-      latency under load (bufferbloat). Download is time-boxed (~10&nbsp;s, capped ~100&nbsp;MB),
-      upload ~18&nbsp;MB &mdash; mind mobile data. Every run is logged.</div>
+    <div class="sub">Down/up throughput to the nearest Cloudflare edge, sustained ~20&nbsp;s down /
+      ~12&nbsp;s up so the number is representative, not a burst. Live btop-style bar trace (down
+      up from the centre, up down from it) with latency-under-load. Fast links stop at ~800&nbsp;MB
+      down / 250&nbsp;MB up &mdash; mind mobile data. Every run is logged.</div>
     <div class="row">
       <button class="btn go" id="bw-run">Run test</button>
       <button class="btn" id="bw-clear">Clear log</button>
@@ -956,8 +957,13 @@
   $("#conn-run").addEventListener("click", connCheck);
   makeShare("#conn-share", connReport);
 
-  // ---- bandwidth: live trace + run log ----
-  const BW = { streams: 4, upStreams: 3, downMs: 10000, capBytes: 100e6, upBytes: 6e6, latMs: 300, sampleMs: 200 };
+  // ---- bandwidth: live bar trace + run log ----
+  const BW = {
+    streams: 4, upStreams: 3,
+    downMs: 20000, upMs: 12000,        // sustained, not a burst
+    downCap: 800e6, upCap: 250e6,      // hard data ceilings (fast links stop early)
+    upBlob: 8e6, latMs: 300, sampleMs: 250, warmup: 3,
+  };
   const bwc = $("#bwc"), bwx = bwc.getContext("2d");
   let bwTrace = null;   // { down:[[s,mbps]], up:[[s,mbps]], lat:[[s,ms]], phase }
   let lastBw = null;
@@ -979,6 +985,8 @@
   }
   const median = a => { if (!a.length) return NaN; const s = a.slice().sort((x, y) => x - y); return s[s.length >> 1]; };
 
+  // btop-style: per-sample vertical bars, download up from the centre line,
+  // upload down from it; faint latency line on the top half (right ms axis).
   function bwDraw() {
     const dpr = window.devicePixelRatio || 1;
     const w = bwc.clientWidth, h = bwc.clientHeight;
@@ -987,41 +995,59 @@
     bwx.setTransform(dpr, 0, 0, dpr, 0, 0);
     bwx.clearRect(0, 0, w, h);
     const t = bwTrace;
-    const padL = 42, padR = 34, padT = 8, padB = 14;
+    const padL = 44, padR = 34, padT = 8, padB = 8;
     const gw = w - padL - padR, gh = h - padT - padB;
+    const half = gh / 2, midY = padT + half;
 
-    const all = t ? t.down.concat(t.up) : [];
-    const tMax = Math.max(10, ...all.map(p => p[0]));
-    const bwMax = niceMax(Math.max(20, ...all.map(p => p[1])));
-    const latAll = t ? t.lat.map(p => p[1]) : [];
-    const latMax = niceMax(Math.max(50, ...latAll));
+    const down = t ? t.down : [], up = t ? t.up : [], lat = t ? t.lat : [];
+    const spanEnd = Math.max(BW.downMs / 1000 + BW.upMs / 1000,
+      ...down.map(p => p[0]), ...up.map(p => p[0])) || 30;
+    const bwMax = niceMax(Math.max(20, ...down.map(p => p[1]), ...up.map(p => p[1])));
+    const latMax = niceMax(Math.max(50, ...lat.map(p => p[1])));
+    const X = s => padL + gw * Math.min(1, s / spanEnd);
+    const slot = gw / (spanEnd / (BW.sampleMs / 1000));
+    const bw = Math.max(1, Math.min(5, slot * 0.72));
 
+    // grid
     bwx.font = "10px ui-monospace, monospace";
     bwx.textBaseline = "middle";
-    for (let i = 0; i <= 4; i++) {
-      const y = padT + gh * (i / 4);
-      bwx.strokeStyle = "#404040"; bwx.globalAlpha = i === 4 ? 0.7 : 0.35;
-      bwx.beginPath(); bwx.moveTo(padL, y); bwx.lineTo(w - padR, y); bwx.stroke();
-      bwx.globalAlpha = 1;
-      bwx.fillStyle = "#b6bfe0"; bwx.textAlign = "right";
-      bwx.fillText(Math.round(bwMax * (1 - i / 4)), padL - 4, y);
-      bwx.fillStyle = "#828cb4"; bwx.textAlign = "left";
-      bwx.fillText(Math.round(latMax * (1 - i / 4)), w - padR + 4, y);
+    [0, 0.5, 1].forEach(f => {
+      for (const s of [1, -1]) {
+        if (f === 0 && s === -1) continue;
+        const y = midY - s * half * f;
+        bwx.strokeStyle = "#404040";
+        bwx.globalAlpha = f === 0 ? 0.7 : 0.3;
+        bwx.beginPath(); bwx.moveTo(padL, y); bwx.lineTo(w - padR, y); bwx.stroke();
+        bwx.globalAlpha = 1;
+        bwx.fillStyle = "#b6bfe0"; bwx.textAlign = "right";
+        bwx.fillText(Math.round(bwMax * f), padL - 5, y);
+      }
+    });
+    bwx.fillStyle = "#828cb4"; bwx.textAlign = "left";
+    bwx.fillText(Math.round(latMax) + "ms", w - padR + 4, padT + 6);
+
+    // bars
+    for (const [s, v] of down) {
+      const bh = Math.max(1, half * Math.min(1, v / bwMax));
+      bwx.fillStyle = "#7dcfff";
+      bwx.fillRect(X(s) - bw / 2, midY - bh, bw, bh);
     }
-    const X = s => padL + gw * Math.min(1, s / tMax);
-    const line = (pts, max, color, wd) => {
-      if (pts.length < 2) return;
-      bwx.strokeStyle = color; bwx.lineWidth = wd; bwx.beginPath();
-      pts.forEach((p, i) => {
-        const x = X(p[0]), y = padT + gh - gh * Math.min(1, p[1] / max);
+    for (const [s, v] of up) {
+      const bh = Math.max(1, half * Math.min(1, v / bwMax));
+      bwx.fillStyle = "#ff6ad5";
+      bwx.fillRect(X(s) - bw / 2, midY, bw, bh);
+    }
+
+    // latency line (top half)
+    if (lat.length > 1) {
+      bwx.strokeStyle = "#9aa4c8"; bwx.lineWidth = 1; bwx.globalAlpha = 0.7;
+      bwx.beginPath();
+      lat.forEach((p, i) => {
+        const x = X(p[0]), y = midY - half * Math.min(1, p[1] / latMax);
         i ? bwx.lineTo(x, y) : bwx.moveTo(x, y);
       });
       bwx.stroke();
-    };
-    if (t) {
-      bwx.globalAlpha = 0.5; line(t.lat, latMax, "#828cb4", 1); bwx.globalAlpha = 1;
-      line(t.down, bwMax, "#7dcfff", 1.6);
-      line(t.up, bwMax, "#ff6ad5", 1.6);
+      bwx.globalAlpha = 1;
     }
   }
 
@@ -1035,6 +1061,7 @@
       ["bufferbloat", fix(b.bloat, 0) + " ms  ·  " + b.grade],
       ["jitter", fix(b.jitter, 0) + " ms"],
       b.edge ? ["edge", b.edge] : null,
+      b.downMB != null ? ["data used", fix(b.downMB, 0) + " MB down / " + fix(b.upMB, 0) + " MB up"] : null,
     ]) : '<div class="meta">not run yet.</div>';
     if (bwLog.length) {
       html += '<div class="meta" style="margin-top:10px">log &mdash; ' + bwLog.length + " run" +
@@ -1047,85 +1074,104 @@
     $("#bw-out").innerHTML = html;
   }
 
-  async function bwDownload(trace, addLat) {
+  const stableAvg = (pts, afterS) => {
+    const v = pts.filter(p => p[0] > afterS).map(p => p[1]).filter(isFinite);
+    return v.length >= 3 ? v.reduce((a, b) => a + b, 0) / v.length : NaN;
+  };
+
+  async function bwDownload(trace) {
     const ac = new AbortController();
     let total = 0, prev = 0, prevT = 0;
     const started = performance.now();
     const pump = async () => {
-      try {
-        const r = await fetch("https://speed.cloudflare.com/__down?bytes=" + BW.capBytes + "&r=" + Math.random(),
-          { cache: "no-store", signal: ac.signal });
-        const rd = r.body.getReader();
-        for (;;) {
-          const { done, value } = await rd.read();
-          if (done) break;
-          total += value.length;
-          if (total >= BW.capBytes) { ac.abort(); break; }
-        }
-      } catch (_) { /* aborted / ended */ }
+      while (!ac.signal.aborted) {
+        try {
+          const r = await fetch("https://speed.cloudflare.com/__down?bytes=" + 1e9 + "&r=" + Math.random(),
+            { cache: "no-store", signal: ac.signal });
+          const rd = r.body.getReader();
+          for (;;) {
+            const { done, value } = await rd.read();
+            if (done) break;                       // stream finished, loop grabs another
+            total += value.length;
+            if (total >= BW.downCap) { ac.abort(); return; }
+          }
+        } catch (_) { return; }                     // aborted
+      }
     };
     const sampler = setInterval(() => {
       const el = performance.now() - started;
-      trace.down.push([el / 1000, mbps(total - prev, el - prevT)]);
+      if (el > prevT) trace.down.push([el / 1000, mbps(total - prev, el - prevT)]);
       prev = total; prevT = el;
       bwDraw();
     }, BW.sampleMs);
     const latLoop = setInterval(async () => {
       const v = await bwPing();
-      if (v != null) { addLat(v); trace.lat.push([(performance.now() - started) / 1000, v]); bwDraw(); }
+      if (v != null) { trace.loadedLat.push(v); trace.lat.push([(performance.now() - started) / 1000, v]); }
     }, BW.latMs);
     const stop = setTimeout(() => ac.abort(), BW.downMs);
     await Promise.all(Array.from({ length: BW.streams }, pump));
     clearInterval(sampler); clearInterval(latLoop); clearTimeout(stop);
     const secs = (performance.now() - started) / 1000;
-    return { bytes: total, mbps: mbps(total, secs * 1000), secs };
+    return { bytes: total, secs, overall: mbps(total, secs * 1000) };
   }
 
-  function bwUploadStream(base, onLoaded) {
-    return new Promise(res => {
-      const xhr = new XMLHttpRequest();
-      xhr.open("POST", "https://speed.cloudflare.com/__up");
-      xhr.upload.onprogress = e => onLoaded(e.loaded);
-      xhr.onloadend = res;
-      xhr.onerror = res;
-      try { xhr.send(new Blob([new Uint8Array(BW.upBytes)])); } catch (_) { res(); }
-    });
+  async function bwUpload(trace, tOffsetS) {
+    let total = 0, prev = 0, prevT = 0;
+    const started = performance.now();
+    let stopped = false;
+    const blob = new Blob([new Uint8Array(BW.upBlob)]);
+    const stream = async () => {
+      let sent = 0;
+      while (!stopped && total < BW.upCap) {
+        await new Promise(res => {
+          const xhr = new XMLHttpRequest();
+          xhr.open("POST", "https://speed.cloudflare.com/__up");
+          xhr.upload.onprogress = e => { total += e.loaded - sent; sent = e.loaded; };
+          xhr.onloadend = () => { total += BW.upBlob - sent; sent = 0; res(); };
+          xhr.onerror = () => { stopped = true; res(); };
+          try { xhr.send(blob); } catch (_) { stopped = true; res(); }
+        });
+      }
+    };
+    const sampler = setInterval(() => {
+      const el = performance.now() - started;
+      if (el > prevT) trace.up.push([(el + tOffsetS * 1000) / 1000, mbps(total - prev, el - prevT)]);
+      prev = total; prevT = el;
+      bwDraw();
+    }, BW.sampleMs);
+    const latLoop = setInterval(async () => {
+      const v = await bwPing();
+      if (v != null) { trace.loadedLat.push(v); trace.lat.push([(performance.now() - started + tOffsetS * 1000) / 1000, v]); }
+    }, BW.latMs);
+    const stop = setTimeout(() => { stopped = true; }, BW.upMs);
+    await Promise.all(Array.from({ length: BW.upStreams }, stream));
+    clearInterval(sampler); clearInterval(latLoop); clearTimeout(stop);
+    const secs = (performance.now() - started) / 1000;
+    return { bytes: total, secs, overall: mbps(total, secs * 1000) };
   }
 
   async function bwRun() {
     busy("#bw-run", "#bw-dot", true);
-    const trace = { down: [], up: [], lat: [], phase: "idle" };
+    const trace = { down: [], up: [], lat: [], loadedLat: [], phase: "idle" };
     bwTrace = trace;
-    const idle = [], loaded = [];
 
     $("#bw-cap").textContent = "idle latency…";
+    const idle = [];
     for (let i = 0; i < 10; i++) { const v = await bwPing(); if (v != null) idle.push(v); }
     const idleMed = median(idle);
     const jitter = idle.length > 1 ? Math.max(...idle) - Math.min(...idle) : NaN;
 
     $("#bw-cap").textContent = "download…"; trace.phase = "download";
-    const dn = await bwDownload(trace, v => loaded.push(v));
+    const dn = await bwDownload(trace);
 
     $("#bw-cap").textContent = "upload…"; trace.phase = "upload";
-    const upStart = performance.now();
-    let upTotal = 0;
-    const perStream = new Array(BW.upStreams).fill(0);
-    const upLat = setInterval(async () => {
-      const v = await bwPing();
-      if (v != null) { loaded.push(v); trace.lat.push([(performance.now() - upStart + dn.secs * 1000) / 1000, v]); }
-    }, BW.latMs);
-    const upTick = setInterval(() => {
-      upTotal = perStream.reduce((a, b) => a + b, 0);
-      trace.up.push([(performance.now() - upStart + dn.secs * 1000) / 1000, mbps(upTotal, performance.now() - upStart)]);
-      bwDraw();
-    }, BW.sampleMs);
-    await Promise.all(Array.from({ length: BW.upStreams }, (_, i) =>
-      bwUploadStream(i, l => { perStream[i] = l; })));
-    clearInterval(upLat); clearInterval(upTick);
-    const upMs = performance.now() - upStart;
-    const upMbps = mbps(BW.upStreams * BW.upBytes, upMs);
+    const up = await bwUpload(trace, dn.secs);
 
-    const loadedMed = median(loaded);
+    // sustained rate = mean of samples past the warm-up ramp; fall back to bytes/time
+    const downMbps = isFinite(stableAvg(trace.down, BW.warmup)) ? stableAvg(trace.down, BW.warmup) : dn.overall;
+    const upMbps = isFinite(stableAvg(trace.up, dn.secs + 2)) ? stableAvg(trace.up, dn.secs + 2) : up.overall;
+
+    const loadedMed = median(trace.loadedLat);
     const bloat = isFinite(loadedMed) && isFinite(idleMed) ? loadedMed - idleMed : NaN;
     const grade = !isFinite(bloat) ? "—" : bloat < 20 ? "A (excellent)" : bloat < 50 ? "B (good)"
       : bloat < 100 ? "C (fair)" : bloat < 200 ? "D (poor)" : "F (bad)";
@@ -1138,10 +1184,11 @@
     } catch (_) {}
 
     trace.phase = "done";
-    lastBw = { down: dn.mbps, up: upMbps, idle: idleMed, loaded: loadedMed, bloat, jitter, grade, edge };
-    bwLog.push({ t: Date.now(), down: dn.mbps, up: upMbps, idle: idleMed, loaded: loadedMed, bloat, jitter, edge });
+    lastBw = { down: downMbps, up: upMbps, idle: idleMed, loaded: loadedMed, bloat, jitter, grade, edge,
+      downMB: dn.bytes / 1e6, upMB: up.bytes / 1e6 };
+    bwLog.push({ t: Date.now(), down: downMbps, up: upMbps, idle: idleMed, loaded: loadedMed, bloat, jitter, edge });
     bwSave();
-    $("#bw-cap").textContent = fix(dn.mbps) + " / " + fix(upMbps) + " Mbps  ·  bloat " + fix(bloat, 0) + " ms";
+    $("#bw-cap").textContent = fix(downMbps) + " / " + fix(upMbps) + " Mbps  ·  bloat " + fix(bloat, 0) + " ms";
     bwDraw();
     bwRenderOut();
     $("#bw-share").disabled = bwLog.length === 0;

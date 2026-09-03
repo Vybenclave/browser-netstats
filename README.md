@@ -46,14 +46,17 @@ These run entirely from the browser:
   (`navigator.connection`, Chrome/Android), and clock offset from the server
   `Date` header. ASN/city need a hosted origin; from a local file you still get
   IP / edge / HTTP / TLS / IPv6 from `cdn-cgi/trace`.
-- **Bandwidth** - 4 parallel streamed down + 3 XHR up streams to
-  `speed.cloudflare.com`, with a **live trace graph** (cyan = down, magenta =
-  up, dim = latency on a right-hand ms axis) and **bufferbloat** grade (idle vs
-  loaded RTT). Download is time-boxed (~10 s, ~100 MB cap); upload ~18 MB.
-  Every run is appended to a **log** kept in `localStorage` - the last 8 show
-  in a table, **Share log** exports the whole thing as CSV
-  (`iso_time, down_mbps, up_mbps, latency_idle_ms, latency_loaded_ms,
-  bufferbloat_ms, jitter_ms, cf_edge`), **Clear log** wipes it.
+- **Bandwidth** - 4 parallel streamed down + 3 looping XHR up streams to
+  `speed.cloudflare.com`, run **sustained** (~20 s down / ~12 s up) so the
+  headline number is a representative rate, not a slow-start burst (the mean of
+  samples past a 3 s warm-up). **btop-style bar trace**: each 250 ms sample is a
+  column - download grows up from the centre line (cyan), upload grows down
+  (magenta), with a faint latency line on a right-hand ms axis. **Bufferbloat**
+  grade = loaded median RTT − idle median. Fast links stop at ~800 MB down /
+  250 MB up. Every run is appended to a **log** in `localStorage` - last 8 in a
+  table, **Share log** exports CSV (`iso_time, down_mbps, up_mbps,
+  latency_idle_ms, latency_loaded_ms, bufferbloat_ms, jitter_ms, cf_edge`),
+  **Clear log** wipes it.
 - **NAT type** - `RTCPeerConnection` against Google + Cloudflare STUN: public
   IP, whether outbound UDP works at all, and cone vs **symmetric** NAT (compares
   the mapped port from each STUN server). Local host candidates are mDNS-hidden
