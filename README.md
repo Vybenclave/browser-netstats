@@ -5,14 +5,15 @@ Tokyo Night theme, cyan/magenta ping graph on a 25% grey grid.
 
 **Live page:** https://vybenclave.github.io/browser-netstats/
 
-Four tools, laid out as a card grid:
+Five tools, laid out as a card grid:
 
 | Tool | Where it runs | Exports |
 | ---- | ------------- | ------- |
 | **Ping** | timed in your browser (HTTPS round-trip) | CSV, last 60 s |
 | **Traceroute** | on a [Globalping](https://globalping.io) probe | CSV of the trace |
 | **DNS lookup** | on a Globalping probe (pick the resolver) | - |
-| **Web & TLS probe** | on a Globalping probe | - |
+| **Web probe** | on a Globalping probe | - |
+| **TLS certificate** | local file (default) or a Globalping probe | - |
 
 ## Ping
 
@@ -87,58 +88,55 @@ automatically).
 Output shows the resolver that answered, the response code, query time, and an
 answer table (`name / type / ttl / data`).
 
-## Web & TLS probe
+## Web probe
 
-Two modes, switched with the buttons at the top of the card.
+Sends a `HEAD` from a Globalping probe to `host:port` for each port you list
+and reports the HTTP status, `Server` / redirect headers, and a one-line cert
+summary (CN + expiry). Full certificate detail lives in the TLS card. Public
+hosts only. `scheme` does **HTTPS**, plain **HTTP**, or **HTTP/2**.
 
-### Fetch from host
+Common web-UI ports: **443**, **8443** (UniFi, pfSense), **8006** (Proxmox),
+**5001** (Synology DSM), **10000** (Webmin), **9090** (Cockpit), **2087**
+(WHM), 4443 / 7443 / 9443 (varies).
 
-Sends a `HEAD` from a Globalping probe to `host:port` for each port you list,
-and reports the HTTP status plus the **served certificate**: subject CN, SANs,
-issuer, validity window and days remaining (amber under 30 days, red once
-expired), key type/bits, cipher, TLS version, serial, and the SHA-256
-fingerprint. `trusted` vs `self-signed / name mismatch` comes from the probe's
-chain check - self-signed certs still parse fine (a browser would just refuse
-them), and connecting by IP usually shows a name mismatch.
+**Scan a range** (the fold-out) sends the same `HEAD` to every address in a
+`/28`-`/32` CIDR or `a.b.c.d-e` range (16 max) and shows a grid: each port
+marked up (HTTP code) or down, each host **live** or **offline**. Public
+ranges only; it stops itself on a rate-limit.
 
-Common web-UI ports to try: **443**, **8443** (UniFi, pfSense), **8006**
-(Proxmox), **5001** (Synology DSM), **10000** (Webmin), **9090** (Cockpit),
-**2087** (WHM), 4443 / 7443 / 9443 (varies). `scheme` also does plain **HTTP**
-and **HTTP/2**.
+## TLS certificate
 
-**Scan a range** (the fold-out) sweeps a `/28`-`/32` CIDR or an `a.b.c.d-e`
-range - 16 addresses max - for a reachable TLS server and lists the ones that
-answer.
+Switch at the top of the card - **Local file** (default) or **Public host**.
 
-### Load a cert file
+**Local file** - pick or drag in a `.pem` / `.crt` / `.cer` / `.der`, or paste
+one or more `-----BEGIN CERTIFICATE-----` blocks. An X.509 parser in the page
+(~180 lines, no dependency) decodes it and shows version, subject and issuer
+DN, serial, `not before` / `not after` and days remaining, SANs, public key
+(RSA / EC / Ed25519 + bits), signature algorithm, basic constraints, key usage
+and extended key usage, subject / authority key IDs, the SHA-1 and SHA-256
+fingerprints, and the SPKI pin (`sha256/<base64>`, HPKP-style). A bundle /
+`fullchain` renders every certificate in it. Nothing is uploaded, nothing is
+validated, and it **works offline** - the way to inspect a cert you exported
+from a LAN device. Fingerprint and SPKI pin were checked byte-for-byte against
+`openssl`.
 
-Pick or drag in a `.pem` / `.crt` / `.cer` / `.der`, or paste one or more
-`-----BEGIN CERTIFICATE-----` blocks. An X.509 parser in the page (~180 lines,
-no dependency) decodes it and shows version, subject and issuer DN, serial,
-`not before` / `not after` and days remaining, SANs, public key
-(RSA/EC/Ed25519 + bits), signature algorithm, basic constraints, key usage and
-extended key usage, subject/authority key IDs, the SHA-1 and SHA-256
-fingerprints, and the SPKI pin (`sha256/<base64>`, HPKP-style). A bundle or
-`fullchain` renders every certificate in it.
+**Public host** - fetches the live certificate from an internet host:port via a
+Globalping probe (handy for a quick check after rotating a cert on a public
+site). Same layout, minus SHA-1 and the SPKI pin, which the probe doesn't
+return.
 
-Nothing is uploaded and nothing is checked - no chain building, no trust
-store, no expiry enforcement, no hostname match. It works offline (it's the
-one part of this card that does), so it's the way to inspect a certificate you
-exported from a LAN device. Fingerprint and SPKI pin were verified byte-for-byte
-against `openssl`.
-
-### What neither mode can do
+### What neither card can do
 
 - **Read a live LAN device's certificate.** Page JavaScript has no API for a
   connection's certificate, `fetch` to a private IP is blocked by Private
   Network Access, and Globalping rejects RFC1918 addresses. Export the cert
   from the device (`openssl s_client -connect host:443 | openssl x509`, or the
-  device's own UI) and use **Load a cert file**.
+  device's own UI) and use **Local file**.
 - **Non-web services** - SSH, SMTP, IMAP, RDP, SMB, VNC, database ports, SNMP,
   etc. Neither a browser (the Fetch "bad ports" blocklist, no raw sockets) nor
   Globalping (only ping / traceroute / mtr / dns / http measurements) can open
   a raw TCP socket to grab a banner. HTTP(S) on any port, DNS, ICMP, and
-  traceroute are the whole menu - which is what these four tools cover.
+  traceroute are the whole menu - which is what these five tools cover.
 
 ## Run it
 
@@ -155,15 +153,15 @@ To serve it locally instead:
 python -m http.server -d browser-netstats 8080
 ```
 
-Ping works from `file://`; traceroute, DNS, and the web/TLS probe need network
-access to `api.globalping.io`.
+Ping and the TLS card's **Local file** mode work from `file://` with no
+internet. Traceroute, DNS, the web probe, and the TLS card's **Public host**
+mode need network access to `api.globalping.io`.
 
 A status chip under the header checks `api.globalping.io` on load and every
 5 minutes (and immediately on the browser's `online`/`offline` events). When it
 can't be reached - offline, opened from disk with no internet, a captive portal
-- the three probe-backed cards grey out with a note and the ping tool is left
-fully usable, so a local no-internet session still gets browser-timed latency
-to whatever host you point it at.
+- the probe-backed cards grey out with a note, while ping and the local cert
+parser stay fully usable.
 
 ## Configuration
 

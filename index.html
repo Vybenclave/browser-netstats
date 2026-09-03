@@ -56,9 +56,6 @@
   body.net-offline .needs-net .offline-note{display:block}
   body.net-offline .needs-net .row,
   body.net-offline .needs-net .providers{opacity:.4;pointer-events:none}
-  /* the cert-file parser is fully local, so keep it live when Globalping is down */
-  body.net-offline #web-modes,
-  body.net-offline #web-file-pane .row{opacity:1;pointer-events:auto}
 
   .grid{
     display:grid;gap:16px;align-items:start;
@@ -107,8 +104,9 @@
   textarea{font:inherit;font-size:12px;background:var(--field);color:var(--fg);border:1px solid var(--border);
            border-radius:7px;padding:7px 9px;width:100%;resize:vertical;line-height:1.4}
   textarea:focus{outline:none;border-color:var(--magenta)}
-  #web-file-pane.drag{outline:1px dashed var(--cyan);outline-offset:5px;border-radius:8px}
-  #web-modes .btn.on{background:rgba(125,207,255,.14);border-color:var(--cyan);color:var(--cyan)}
+  #tls-local-pane.drag{outline:1px dashed var(--cyan);outline-offset:5px;border-radius:8px}
+  #tls-modes .btn.on{background:rgba(125,207,255,.14);border-color:var(--cyan);color:var(--cyan)}
+  body.net-offline #tls-public-pane .offline-note{display:block}
 
   .stats{margin-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:8px}
   .stat{background:var(--field);border:1px solid var(--border);border-radius:8px;padding:8px 10px;min-width:0}
@@ -131,6 +129,8 @@
   .tbl td{padding:4px 8px;border-bottom:1px solid rgba(255,255,255,.045);color:var(--fg-dim);
           white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:190px}
   .tbl tr:hover td{color:var(--fg)}
+  .tbl td.up{color:var(--green)}
+  .tbl td.down{color:var(--muted)}
   pre.raw{margin-top:8px;max-height:150px;overflow:auto;background:#0b0d16;border:1px solid var(--border);
           border-radius:6px;padding:8px;font-size:10.5px;line-height:1.45;color:var(--fg-dim);white-space:pre}
   code{background:var(--field);border:1px solid var(--border);border-radius:4px;padding:0 4px;font-size:10.5px}
@@ -162,8 +162,8 @@
      round-trip (not ICMP), once every 500&nbsp;ms. <b>Traceroute</b>, <b>DNS</b>, and the
      <b>web&nbsp;/&nbsp;TLS probe</b> can't run in a browser directly, so they execute on a
      <a href="https://globalping.io">Globalping</a> probe &mdash; which is also what lets DNS query
-     any resolver, and what fetches a live host's certificate. The <b>web&nbsp;/&nbsp;TLS</b> card
-     also parses a cert file you already have, entirely in the page. Ping and traceroute results
+     any resolver and fetches a live host's certificate. The <b>TLS certificate</b> card also parses
+     a cert file you already have, entirely in the page and offline. Ping and traceroute results
      export to CSV.</p>
   <div id="netbar" class="netbar checking">
     <span class="nb-dot"></span>
@@ -307,65 +307,70 @@
     <div class="out" id="dns-out"><div class="meta">no query yet.</div></div>
   </section>
 
-  <!-- ==================== WEB / TLS ==================== -->
+  <!-- ==================== WEB PROBE ==================== -->
   <section class="card needs-net" id="web">
-    <h2>Web &amp; TLS probe <span class="dot" id="web-dot"></span></h2>
-    <div class="offline-note">Fetching from a host needs a Globalping probe (unreachable now) &mdash;
-      but <b>Load a cert file</b> is parsed entirely in your browser and still works offline.</div>
+    <h2>Web probe <span class="dot" id="web-dot"></span></h2>
+    <div class="offline-note">Runs on a Globalping probe, which is unreachable right now.</div>
+    <div class="sub">A HEAD from a Globalping probe, one per port &mdash; HTTP status, <code>Server</code>
+      and redirect headers, and a one-line cert summary. Public hosts only. For full certificate
+      detail use the <b>TLS certificate</b> card.</div>
 
-    <div class="row" id="web-modes">
-      <button class="btn on" data-mode="fetch">Fetch from host</button>
-      <button class="btn" data-mode="file">Load a cert file</button>
+    <div class="row">
+      <label class="fld grow">host / public ip
+        <input class="host" id="web-target" type="text" placeholder="e.g. example.com" spellcheck="false" autocomplete="off">
+      </label>
+      <label class="fld">scheme
+        <select id="web-proto">
+          <option>HTTPS</option><option>HTTP</option><option value="HTTP2">HTTP/2</option>
+        </select>
+      </label>
+    </div>
+    <div class="row">
+      <label class="fld grow">ports
+        <input class="host" id="web-ports" type="text" value="443, 8443, 8006, 5001, 10000" spellcheck="false" autocomplete="off">
+      </label>
+      <label class="fld">probe
+        <input class="from" id="web-from" type="text" value="US" spellcheck="false" autocomplete="off">
+      </label>
+    </div>
+    <div class="row">
+      <button class="btn go" id="web-run">Check</button>
+      <button class="btn" id="web-sweep-toggle" aria-expanded="false">Scan a range &#9656;</button>
     </div>
 
-    <div id="web-fetch-pane">
-      <div class="sub">A HEAD request from a Globalping probe, one per port &mdash; reports the HTTP
-        status and the served certificate. Public hosts only: Globalping refuses private / RFC1918
-        addresses, and page JavaScript can't read a live connection's certificate.</div>
-
+    <div id="web-sweep" hidden>
+      <div class="sub" style="margin-top:2px">HEAD to every address in a <code>/28</code>&ndash;<code>/32</code>
+        CIDR or <code>a.b.c.d-e</code> range (16 max) and marks each port up / down and the host
+        live / offline. Public ranges only; ~250&nbsp;probe runs/hour, so keep it small.</div>
       <div class="row">
-        <label class="fld grow">host / public ip
-          <input class="host" id="web-target" type="text" placeholder="e.g. example.com" spellcheck="false" autocomplete="off">
+        <label class="fld grow">cidr / range
+          <input class="host" id="web-range" type="text" placeholder="203.0.113.0/29   or   203.0.113.1-14" spellcheck="false" autocomplete="off">
         </label>
-        <label class="fld">scheme
-          <select id="web-proto">
-            <option>HTTPS</option><option>HTTP</option><option value="HTTP2">HTTP/2</option>
-          </select>
+        <label class="fld">ports
+          <input class="from" id="web-range-ports" type="text" value="443, 8443" spellcheck="false" autocomplete="off">
         </label>
-      </div>
-      <div class="row">
-        <label class="fld grow">ports
-          <input class="host" id="web-ports" type="text" value="443, 8443, 8006, 5001, 10000" spellcheck="false" autocomplete="off">
-        </label>
-        <label class="fld">probe
-          <input class="from" id="web-from" type="text" value="US" spellcheck="false" autocomplete="off">
-        </label>
-      </div>
-      <div class="row">
-        <button class="btn go" id="web-run">Check</button>
-        <button class="btn" id="web-sweep-toggle" aria-expanded="false">Scan a range &#9656;</button>
-      </div>
-
-      <div id="web-sweep" hidden>
-        <div class="sub" style="margin-top:2px">Sweeps up to 16 addresses (a <code>/28</code>&ndash;<code>/32</code>
-          CIDR, or <code>a.b.c.d-e</code>) for a reachable TLS server. Public ranges only, and every
-          address spends probe quota (~250&nbsp;runs/hour) &mdash; keep it small.</div>
-        <div class="row">
-          <label class="fld grow">cidr / range
-            <input class="host" id="web-range" type="text" placeholder="203.0.113.0/29   or   203.0.113.1-14" spellcheck="false" autocomplete="off">
-          </label>
-          <label class="fld">ports
-            <input class="from" id="web-range-ports" type="text" value="443, 8443" spellcheck="false" autocomplete="off">
-          </label>
-          <button class="btn go" id="web-sweep-run">Sweep</button>
-        </div>
+        <button class="btn go" id="web-sweep-run">Sweep</button>
       </div>
     </div>
 
-    <div id="web-file-pane" hidden>
-      <div class="sub">Decoded with an X.509 parser in the page &mdash; nothing is uploaded, no chain
-        building, no trust-store or expiry check. Takes PEM or DER (<code>.pem .crt .cer .der</code>);
-        a bundle / <code>fullchain</code> shows every certificate in it.</div>
+    <div class="out" id="web-out"><div class="meta">no probe yet.</div></div>
+  </section>
+
+  <!-- ==================== TLS CERTIFICATE ==================== -->
+  <section class="card" id="tls">
+    <h2>TLS certificate <span class="dot" id="tls-dot"></span></h2>
+    <div class="sub">View an X.509 certificate &mdash; no validation, no chain building, no trust-store
+      or expiry check.</div>
+
+    <div class="row" id="tls-modes">
+      <button class="btn on" data-mode="local">Local file</button>
+      <button class="btn" data-mode="public">Public host</button>
+    </div>
+
+    <div id="tls-local-pane">
+      <div class="sub">Decoded by an X.509 parser in the page &mdash; nothing is uploaded. PEM or DER
+        (<code>.pem .crt .cer .der</code>); a bundle / <code>fullchain</code> shows every certificate
+        in it. Works offline.</div>
       <div class="row">
         <input type="file" id="cert-file" accept=".pem,.crt,.cer,.der,.txt,application/x-x509-ca-cert,application/pkix-cert,application/x-pem-file">
       </div>
@@ -378,7 +383,27 @@
       </div>
     </div>
 
-    <div class="out" id="web-out"><div class="meta">no probe yet.</div></div>
+    <div id="tls-public-pane" hidden>
+      <div class="sub">Fetches the live certificate from an internet host via a Globalping probe.
+        Public hosts only; SHA-1 and the SPKI pin are Local-mode only.</div>
+      <div class="offline-note">Public fetch needs Globalping (unreachable now). Local mode works offline.</div>
+      <div class="row">
+        <label class="fld grow">host / public ip
+          <input class="host" id="tls-host" type="text" placeholder="e.g. example.com" spellcheck="false" autocomplete="off">
+        </label>
+        <label class="fld">port
+          <input class="hops" id="tls-port" type="text" value="443" spellcheck="false" autocomplete="off">
+        </label>
+        <label class="fld">probe
+          <input class="from" id="tls-from" type="text" value="US" spellcheck="false" autocomplete="off">
+        </label>
+      </div>
+      <div class="row">
+        <button class="btn go" id="tls-run">Fetch cert</button>
+      </div>
+    </div>
+
+    <div class="out" id="tls-out"><div class="meta">load or paste a certificate file.</div></div>
   </section>
 
 </div>
@@ -883,7 +908,7 @@
   $("#dns-name").addEventListener("keydown", e => { if (e.key === "Enter") runDns(); });
 
   // =====================================================================
-  //  WEB / TLS  -- HTTP(S) probe + certificate view, on a Globalping probe
+  //  WEB PROBE  -- HTTP(S) status + range sweep, on a Globalping probe
   // =====================================================================
   const webOut = $("#web-out");
 
@@ -933,9 +958,6 @@
     throw new Error("expected a CIDR (a.b.c.d/29) or a range (a.b.c.d-e)");
   }
 
-  const sanList = alt => !alt ? [] :
-    String(alt).split(/,\s*/).map(s => s.replace(/^(DNS|IP Address):/i, "").trim()).filter(Boolean);
-
   function expiry(iso) {
     if (!iso) return { txt: "—", cls: "" };
     const days = Math.round((new Date(iso) - Date.now()) / 86400000);
@@ -968,17 +990,10 @@
     const rows = [];
     const hdr = (res && res.headers) || {};
     if (t) {
-      const sans = sanList(t.subject && t.subject.alt);
       const ex = expiry(t.expiresAt);
-      rows.push(["subject", (t.subject && t.subject.CN) || "—"]);
-      if (sans.length) rows.push(["SAN (" + sans.length + ")", sans.join(", ")]);
-      rows.push(["issuer", [t.issuer && t.issuer.O, t.issuer && t.issuer.CN].filter(Boolean).join(" — ") || "—"]);
-      rows.push(["valid", String(t.createdAt).slice(0, 10) + "  to  " + String(t.expiresAt).slice(0, 10)]);
-      rows.push(["expires", '<span class="' + ex.cls + '">' + esc(ex.txt) + "</span>", 1]);
-      rows.push(["key", (t.keyType || "?") + " " + (t.keyBits || "?") + "-bit"]);
-      rows.push(["cipher", t.cipherName || "—"]);
-      rows.push(["serial", t.serialNumber || "—"]);
-      rows.push(["SHA-256", t.fingerprint256 || "—"]);
+      const cn = (t.subject && t.subject.CN) || "—";
+      rows.push(["cert", esc(cn) + '  ·  <span class="' + ex.cls + '">' + esc(ex.txt) +
+        "</span>  ·  full detail in the TLS card", 1]);
     } else if (res) {
       rows.push(["note", (res.rawOutput || "").split("\n")[0] || "connected, no certificate on this port"]);
     }
@@ -1025,10 +1040,19 @@
     setBusy("#web-run", "#web-dot", false);
   }
 
-  const sweepTable = found => !found.length ? "" :
-    '<table class="tbl"><thead><tr><th>address</th><th>tls ports</th><th>cert cn</th></tr></thead><tbody>' +
-    found.map(f => "<tr><td>" + esc(f.ip) + "</td><td>" + f.open.join(", ") + "</td><td>" +
-      esc(f.cn || "—") + "</td></tr>").join("") + "</tbody></table>";
+  function sweepGrid(ips, ports, grid, done, aborted) {
+    const liveN = grid.slice(0, done).filter(g => g.live).length;
+    let h = '<div class="meta' + (aborted ? " err" : "") + '">' +
+      (aborted ? "stopped: " + esc(aborted)
+        : ips.length + " addresses  ·  " + done + " scanned  ·  " + liveN + " live") + "</div>";
+    h += '<table class="tbl"><thead><tr><th>address</th>' +
+      ports.map(p => "<th>:" + p + "</th>").join("") + "<th>state</th></tr></thead><tbody>";
+    h += grid.slice(0, done).map(g =>
+      "<tr><td>" + esc(g.ip) + "</td>" +
+      g.cells.map(c => c ? '<td class="up">' + esc(c) + "</td>" : '<td class="down">&ndash;</td>').join("") +
+      '<td class="' + (g.live ? "up" : "down") + '">' + (g.live ? "live" : "offline") + "</td></tr>").join("");
+    return h + "</tbody></table>";
+  }
 
   async function webSweep() {
     if (!requireNet(webOut)) return;
@@ -1042,34 +1066,27 @@
         " is private — Globalping only reaches public addresses.</div>";
       return;
     }
-    const ports = parsePorts($("#web-range-ports").value, [443]).slice(0, 3);
+    const ports = parsePorts($("#web-range-ports").value, [443]).slice(0, 4);
+    const proto = $("#web-proto").value;
     const magic = $("#web-from").value.trim() || "US";
     setBusy("#web-sweep-run", "#web-dot", true);
 
-    const found = [];
+    const grid = ips.map(ip => ({ ip, cells: ports.map(() => null), live: false }));
     let aborted = "";
     for (let i = 0; i < ips.length && !aborted; i++) {
-      const hit = { ip: ips[i], open: [], cn: "" };
-      for (const port of ports) {
+      for (let p = 0; p < ports.length; p++) {
         try {
           const res = await globalping("http", ips[i],
-            { protocol: "HTTPS", port, request: { method: "HEAD", path: "/" } }, magic);
-          if (res.statusCode || res.tls) {
-            hit.open.push(port);
-            if (!hit.cn && res.tls && res.tls.subject) hit.cn = res.tls.subject.CN || "";
-          }
+            { protocol: proto, port: ports[p], request: { method: "HEAD", path: "/" } }, magic);
+          grid[i].cells[p] = res.statusCode ? String(res.statusCode) : res.tls ? "TLS" : null;
         } catch (e) {
           if (/limit|429|too many|rate/i.test(e.message)) { aborted = e.message; break; }
         }
+        if (grid[i].cells[p]) grid[i].live = true;
       }
-      if (hit.open.length) found.push(hit);
-      webOut.innerHTML = '<div class="meta">swept ' + (i + 1) + "/" + ips.length + "  ·  " +
-        found.length + " with a TLS server &hellip;</div>" + sweepTable(found);
+      webOut.innerHTML = sweepGrid(ips, ports, grid, i + 1, aborted);
     }
-    webOut.innerHTML = (aborted
-      ? '<div class="meta err">stopped: ' + esc(aborted) + "</div>"
-      : '<div class="meta">' + ips.length + " addresses  ·  " + found.length +
-        " with a reachable TLS server</div>") + sweepTable(found);
+    webOut.innerHTML = sweepGrid(ips, ports, grid, ips.length, aborted);
     setBusy("#web-sweep-run", "#web-dot", false);
   }
 
@@ -1083,20 +1100,21 @@
     $("#web-sweep-toggle").innerHTML = box.hidden ? "Scan a range ▸" : "Hide range scan ▾";
   });
 
-  // ---- mode switch: fetch-from-host  <->  load-a-file ----
-  [...document.querySelectorAll("#web-modes .btn")].forEach(btn => {
+  // =====================================================================
+  //  TLS CERTIFICATE  -- local X.509 parser (default) + public fetch
+  // =====================================================================
+  const tlsOut = $("#tls-out");
+
+  [...document.querySelectorAll("#tls-modes .btn")].forEach(btn => {
     btn.addEventListener("click", () => {
-      const file = btn.dataset.mode === "file";
-      document.querySelectorAll("#web-modes .btn").forEach(x => x.classList.toggle("on", x === btn));
-      $("#web-fetch-pane").hidden = file;
-      $("#web-file-pane").hidden = !file;
-      webOut.innerHTML = '<div class="meta">' + (file ? "choose a file or paste a PEM." : "no probe yet.") + "</div>";
+      const pub = btn.dataset.mode === "public";
+      document.querySelectorAll("#tls-modes .btn").forEach(x => x.classList.toggle("on", x === btn));
+      $("#tls-local-pane").hidden = pub;
+      $("#tls-public-pane").hidden = !pub;
+      tlsOut.innerHTML = '<div class="meta">' +
+        (pub ? "fetch a certificate from an internet host." : "load or paste a certificate file.") + "</div>";
     });
   });
-
-  // =====================================================================
-  //  LOCAL X.509 VIEWER  -- parse a cert file/paste in the page, no network
-  // =====================================================================
   const B = { hex: (a, s = ":") => Array.from(a, x => x.toString(16).padStart(2, "0")).join(s) };
 
   function tlv(b, p) {
@@ -1282,28 +1300,32 @@
     const iso = d => d.toISOString().replace("T", " ").replace(".000Z", " UTC");
     let h = '<div class="svc"><div class="svc-h"><b>' +
       (total > 1 ? "Cert " + (idx + 1) + " / " + total : "Certificate") + "</b>" +
-      '<span class="badge">v' + c.version + "</span>" +
+      (c.version ? '<span class="badge">v' + c.version + "</span>" : "") +
       '<span class="badge ' + state.cls + '">' + state.t + "</span>" +
       "<span>" + esc(c.key.type + (c.key.bits ? " " + c.key.bits : "")) + "</span>" +
+      (c.proto ? "<span>" + esc(c.proto) + "</span>" : "") +
+      (c.authorized === true ? '<span class="badge ok">trusted</span>'
+        : c.authorized === false ? '<span class="badge warn">untrusted</span>' : "") +
       (c.ext.ca ? '<span class="badge warn">CA</span>' : "") + "</div>";
     const rows = [
       ["subject", c.subject || "—"],
       c.ext.sans.length && ["SAN (" + c.ext.sans.length + ")", c.ext.sans.join(", ")],
       ["issuer", c.issuer || "—"],
-      ["serial", c.serial],
+      ["serial", c.serial || "—"],
       ["not before", iso(c.notBefore)],
       ["not after", iso(c.notAfter)],
       ["expires", '<span class="' + ex.cls + '">' + esc(ex.txt) + "</span>", 1],
       ["public key", c.key.type + (c.key.curve ? " " + c.key.curve : "") + (c.key.bits ? "  ·  " + c.key.bits + "-bit" : "")],
-      ["signature", c.sigAlg],
+      c.sigAlg && ["signature", c.sigAlg],
+      c.cipher && ["cipher", c.cipher],
       c.ext.ku.length && ["key usage", c.ext.ku.join(", ")],
       c.ext.eku.length && ["ext key usage", c.ext.eku.join(", ")],
       c.ext.ca !== null && ["basic constraints", "CA:" + (c.ext.ca ? "TRUE" : "FALSE")],
       c.ext.ski && ["subject key id", c.ext.ski],
       c.ext.aki && ["authority key id", c.ext.aki],
-      ["SHA-256", c.sha256],
-      ["SHA-1", c.sha1],
-      ["SPKI pin", "sha256/" + c.spkiPin],
+      ["SHA-256", c.sha256 || "—"],
+      c.sha1 && ["SHA-1", c.sha1],
+      c.spkiPin && ["SPKI pin", "sha256/" + c.spkiPin],
     ].filter(Boolean);
     return h + '<table class="kv">' + rows.map(r =>
       "<tr><td>" + esc(r[0]) + "</td><td>" + (r[2] ? r[1] : esc(r[1])) + "</td></tr>").join("") + "</table></div>";
@@ -1311,23 +1333,86 @@
 
   async function parseCertInput() {
     if (!(window.crypto && crypto.subtle)) {
-      webOut.innerHTML = '<div class="meta err">WebCrypto isn\'t available in this context.</div>';
+      tlsOut.innerHTML = '<div class="meta err">WebCrypto isn\'t available in this context.</div>';
       return;
     }
     const f = $("#cert-file").files && $("#cert-file").files[0];
     const pasted = $("#cert-paste").value.trim();
-    if (!f && !pasted) { webOut.innerHTML = '<div class="meta">choose a file or paste a PEM.</div>'; return; }
-    webOut.innerHTML = '<div class="meta">parsing locally &hellip;</div>';
+    if (!f && !pasted) { tlsOut.innerHTML = '<div class="meta">choose a file or paste a PEM.</div>'; return; }
+    tlsOut.innerHTML = '<div class="meta">parsing locally &hellip;</div>';
     try {
       const src = f ? new Uint8Array(await f.arrayBuffer()) : pasted;
       const ders = toDerList(src);
       const certs = [];
       for (const d of ders) certs.push(await parseCert(d));
-      webOut.innerHTML = '<div class="meta">parsed in the browser  ·  ' + certs.length + " cert" +
+      tlsOut.innerHTML = '<div class="meta">parsed in the browser  ·  ' + certs.length + " cert" +
         (certs.length === 1 ? "" : "s") + "  ·  no validation performed</div>" +
         certs.map((c, i) => certBlock(c, i, certs.length)).join("");
     } catch (e) {
-      webOut.innerHTML = '<div class="meta err">Parse error: ' + esc(e.message) + "</div>";
+      tlsOut.innerHTML = '<div class="meta err">Parse error: ' + esc(e.message) + "</div>";
+    }
+  }
+
+  // ---- public mode: pull the live cert from a host via Globalping ----
+  const DN_ORDER = ["C", "ST", "L", "O", "OU", "CN"];
+  const dnStr = o => {
+    if (!o) return "";
+    const ordered = DN_ORDER.filter(k => o[k]).map(k => k + "=" + o[k]);
+    return ordered.length ? ordered.join(", ")
+      : Object.entries(o).filter(([k]) => k !== "alt").map(([k, v]) => k + "=" + v).join(", ");
+  };
+  function gpToCert(t) {
+    return {
+      version: null,
+      serial: t.serialNumber || "",
+      issuer: dnStr(t.issuer),
+      subject: dnStr(t.subject),
+      notBefore: new Date(t.createdAt),
+      notAfter: new Date(t.expiresAt),
+      key: { type: t.keyType || "?", bits: t.keyBits || null, curve: null },
+      sigAlg: null,
+      cipher: t.cipherName || null,
+      proto: t.protocol || null,
+      authorized: typeof t.authorized === "boolean" ? t.authorized : null,
+      ext: {
+        sans: (t.subject && t.subject.alt) ? String(t.subject.alt).split(/,\s*/).filter(Boolean) : [],
+        ku: [], eku: [], ca: null, ski: "", aki: "",
+      },
+      sha256: t.fingerprint256 || "",
+      sha1: null,
+      spkiPin: null,
+    };
+  }
+
+  async function tlsFetchPublic() {
+    const host = cleanHost($("#tls-host").value);
+    if (!host) return;
+    if (!requireNet(tlsOut)) return;
+    if (isPrivateV4(host)) {
+      tlsOut.innerHTML = '<div class="meta err">' + esc(host) +
+        " is private — Globalping only reaches public hosts. Use Local mode with an exported cert.</div>";
+      return;
+    }
+    const port = parsePorts($("#tls-port").value, [443])[0];
+    const magic = $("#tls-from").value.trim() || "US";
+    setBusy("#tls-run", "#tls-dot", true);
+    tlsOut.innerHTML = '<div class="meta">fetching ' + esc(host) + ":" + port + " cert &hellip;</div>";
+    try {
+      const res = await globalping("http", host,
+        { protocol: "HTTPS", port, request: { method: "HEAD", path: "/" } }, magic);
+      if (!res.tls) {
+        tlsOut.innerHTML = '<div class="meta err">no TLS on ' + esc(host) + ":" + port + " (" +
+          esc((res.rawOutput || "").split("\n")[0] || "no handshake") + ")</div>";
+        return;
+      }
+      tlsOut.innerHTML = '<div class="meta">live fetch  ·  ' + esc(host) + ":" + port +
+        (res._probe ? "  ·  via " + esc(probeLabel(res._probe, "")) : "") +
+        "  ·  no validation  ·  SHA-1 / SPKI pin are Local-mode only</div>" +
+        certBlock(gpToCert(res.tls), 0, 1);
+    } catch (e) {
+      tlsOut.innerHTML = '<div class="meta err">Error: ' + esc(e.message) + "</div>";
+    } finally {
+      setBusy("#tls-run", "#tls-dot", false);
     }
   }
 
@@ -1335,11 +1420,13 @@
   $("#cert-clear").addEventListener("click", () => {
     $("#cert-file").value = "";
     $("#cert-paste").value = "";
-    webOut.innerHTML = '<div class="meta">choose a file or paste a PEM.</div>';
+    tlsOut.innerHTML = '<div class="meta">load or paste a certificate file.</div>';
   });
   $("#cert-file").addEventListener("change", parseCertInput);
+  $("#tls-run").addEventListener("click", tlsFetchPublic);
+  $("#tls-host").addEventListener("keydown", e => { if (e.key === "Enter") tlsFetchPublic(); });
   (() => {
-    const fp = $("#web-file-pane");
+    const fp = $("#tls-local-pane");
     fp.addEventListener("dragover", e => { e.preventDefault(); fp.classList.add("drag"); });
     fp.addEventListener("dragleave", e => { if (e.target === fp) fp.classList.remove("drag"); });
     fp.addEventListener("drop", e => {
@@ -1369,7 +1456,7 @@
         ? "Globalping reachable  ·  checked " + new Date().toLocaleTimeString()
         : state === "offline"
         ? "Globalping unreachable" + (detail ? " (" + detail + ")" : "") +
-          "  —  traceroute, DNS and TLS tools are paused; ping still works"
+          "  —  probe-backed tools pause; ping and local cert parsing still work"
         : "checking Globalping connectivity…";
     document.body.classList.toggle("net-offline", state === "offline");
   }
@@ -1391,8 +1478,8 @@
 
   function requireNet(outEl) {
     if (netOnline) return true;
-    outEl.innerHTML = '<div class="meta err">Globalping is unreachable right now, so this tool is ' +
-      "paused. Ping still works offline (try a custom host on your LAN).</div>";
+    outEl.innerHTML = '<div class="meta err">This needs Globalping, which is unreachable right now. ' +
+      "Ping and the local (file) cert viewer still work offline.</div>";
     return false;
   }
 
