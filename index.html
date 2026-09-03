@@ -214,22 +214,13 @@
     <div class="shbar"><button class="btn" id="conn-share" disabled>Share result</button></div>
     <div class="out" id="conn-out"><div class="meta">not checked yet.</div></div>
   </section>
-  <!-- ==================== NAT TYPE ==================== -->
-  <section class="card" id="nat">
-    <h2>NAT type <span class="dot" id="nat-dot"></span></h2>
-    <div class="sub">WebRTC + public STUN: your public IP, whether outbound UDP works, and whether
-      your NAT is symmetric (bad for peer-to-peer, VoIP, hosting games). Local to the browser.</div>
-    <div class="row"><button class="btn go" id="nat-run">Check</button></div>
-    <div class="shbar"><button class="btn" id="nat-share" disabled>Share result</button></div>
-    <div class="out" id="nat-out"><div class="meta">not checked yet.</div></div>
-  </section>
   <!-- ==================== BANDWIDTH ==================== -->
   <section class="card" id="bw">
     <h2>Bandwidth <span class="dot" id="bw-dot"></span></h2>
     <div class="sub">Down/up throughput to the nearest Cloudflare edge, sustained ~20&nbsp;s down /
       ~12&nbsp;s up so the number is representative, not a burst. Live btop-style bar trace (down
-      up from the centre, up down from it) with latency-under-load. Fast links stop at ~1.6&nbsp;GB
-      down / 500&nbsp;MB up &mdash; mind mobile data. Every run is logged.</div>
+      up from the centre, up mirrored below). Fast links stop at ~1.6&nbsp;GB each way &mdash; mind
+      mobile data. Every run is logged.</div>
     <div class="row">
       <button class="btn go" id="bw-run">Run test</button>
       <button class="btn" id="bw-clear">Clear log</button>
@@ -241,7 +232,6 @@
         <span class="legend">
           <span><i style="background:#7dcfff"></i>down</span>
           <span><i style="background:#ff6ad5"></i>up</span>
-          <span><i style="background:#828cb4"></i>latency</span>
         </span>
       </div>
       <canvas id="bwc"></canvas>
@@ -249,15 +239,6 @@
 
     <div class="shbar"><button class="btn" id="bw-share" disabled>Share log</button></div>
     <div class="out" id="bw-out"><div class="meta">not run yet.</div></div>
-  </section>
-  <!-- ==================== LATENCY MATRIX ==================== -->
-  <section class="card" id="lat">
-    <h2>Latency matrix <span class="dot" id="lat-dot"></span></h2>
-    <div class="sub">HTTPS round-trip from here to a spread of public anycast endpoints, sorted
-      fastest first &mdash; shows where your network routes well. Timed in the browser.</div>
-    <div class="row"><button class="btn go" id="lat-run">Ping all</button></div>
-    <div class="shbar"><button class="btn" id="lat-share" disabled>Share result</button></div>
-    <div class="out" id="lat-out"><div class="meta">not run yet.</div></div>
   </section>
   <!-- ==================== PING ==================== -->
   <section class="card" id="ping">
@@ -316,6 +297,24 @@
     </div>
 
     <div class="shbar"><button class="btn" id="ping-share" disabled>Share result</button></div>
+  </section>
+  <!-- ==================== NAT TYPE ==================== -->
+  <section class="card" id="nat">
+    <h2>NAT type <span class="dot" id="nat-dot"></span></h2>
+    <div class="sub">WebRTC + public STUN: your public IP, whether outbound UDP works, and whether
+      your NAT is symmetric (bad for peer-to-peer, VoIP, hosting games). Local to the browser.</div>
+    <div class="row"><button class="btn go" id="nat-run">Check</button></div>
+    <div class="shbar"><button class="btn" id="nat-share" disabled>Share result</button></div>
+    <div class="out" id="nat-out"><div class="meta">not checked yet.</div></div>
+  </section>
+  <!-- ==================== LATENCY MATRIX ==================== -->
+  <section class="card" id="lat">
+    <h2>Latency matrix <span class="dot" id="lat-dot"></span></h2>
+    <div class="sub">HTTPS round-trip from here to a spread of public anycast endpoints, sorted
+      fastest first &mdash; shows where your network routes well. Timed in the browser.</div>
+    <div class="row"><button class="btn go" id="lat-run">Ping all</button></div>
+    <div class="shbar"><button class="btn" id="lat-share" disabled>Share result</button></div>
+    <div class="out" id="lat-out"><div class="meta">not run yet.</div></div>
   </section>
   </div>
   <div class="col">
@@ -974,7 +973,7 @@
   const BW = {
     streams: 4, upStreams: 3,
     downMs: 20000, upMs: 12000,        // sustained, not a burst
-    downCap: 1600e6, upCap: 500e6,     // hard data ceilings (fast links stop early)
+    downCap: 1600e6, upCap: 1600e6,    // hard data ceilings (fast links stop early)
     upBlob: 8e6, latMs: 300, sampleMs: 250, warmup: 3,
   };
   const bwc = $("#bwc"), bwx = bwc.getContext("2d");
@@ -998,8 +997,9 @@
   }
   const median = a => { if (!a.length) return NaN; const s = a.slice().sort((x, y) => x - y); return s[s.length >> 1]; };
 
-  // btop-style: per-sample vertical bars, download up from the centre line,
-  // upload down from it; faint latency line on the top half (right ms axis).
+  // btop-style: newest sample at the right edge, scrolling left. Download grows
+  // up from the centre, upload grows down at the same slot (mirrored by index).
+  const BW_WIN = 120;
   function bwDraw() {
     const dpr = window.devicePixelRatio || 1;
     const w = bwc.clientWidth, h = bwc.clientHeight;
@@ -1008,60 +1008,42 @@
     bwx.setTransform(dpr, 0, 0, dpr, 0, 0);
     bwx.clearRect(0, 0, w, h);
     const t = bwTrace;
-    const padL = 44, padR = 34, padT = 8, padB = 8;
+    const padL = 44, padR = 8, padT = 8, padB = 8;
     const gw = w - padL - padR, gh = h - padT - padB;
     const half = gh / 2, midY = padT + half;
 
-    const down = t ? t.down : [], up = t ? t.up : [], lat = t ? t.lat : [];
-    const spanEnd = Math.max(BW.downMs / 1000 + BW.upMs / 1000,
-      ...down.map(p => p[0]), ...up.map(p => p[0])) || 30;
-    const bwMax = niceMax(Math.max(20, ...down.map(p => p[1]), ...up.map(p => p[1])));
-    const latMax = niceMax(Math.max(50, ...lat.map(p => p[1])));
-    const X = s => padL + gw * Math.min(1, s / spanEnd);
-    const slot = gw / (spanEnd / (BW.sampleMs / 1000));
+    const down = t ? t.down.map(p => p[1]) : [];
+    const up = t ? t.up.map(p => p[1]) : [];
+    const bwMax = niceMax(Math.max(20, ...down, ...up));
+    const slot = gw / BW_WIN;
     const bw = Math.max(1, Math.min(5, slot * 0.72));
+    const rightX = w - padR;
 
-    // grid
+    // grid + Mbps labels (mirrored)
     bwx.font = "10px ui-monospace, monospace";
-    bwx.textBaseline = "middle";
-    [0, 0.5, 1].forEach(f => {
-      for (const s of [1, -1]) {
-        if (f === 0 && s === -1) continue;
-        const y = midY - s * half * f;
-        bwx.strokeStyle = "#404040";
-        bwx.globalAlpha = f === 0 ? 0.7 : 0.3;
-        bwx.beginPath(); bwx.moveTo(padL, y); bwx.lineTo(w - padR, y); bwx.stroke();
-        bwx.globalAlpha = 1;
-        bwx.fillStyle = "#b6bfe0"; bwx.textAlign = "right";
-        bwx.fillText(Math.round(bwMax * f), padL - 5, y);
-      }
-    });
-    bwx.fillStyle = "#828cb4"; bwx.textAlign = "left";
-    bwx.fillText(Math.round(latMax) + "ms", w - padR + 4, padT + 6);
-
-    // bars
-    for (const [s, v] of down) {
-      const bh = Math.max(1, half * Math.min(1, v / bwMax));
-      bwx.fillStyle = "#7dcfff";
-      bwx.fillRect(X(s) - bw / 2, midY - bh, bw, bh);
-    }
-    for (const [s, v] of up) {
-      const bh = Math.max(1, half * Math.min(1, v / bwMax));
-      bwx.fillStyle = "#ff6ad5";
-      bwx.fillRect(X(s) - bw / 2, midY, bw, bh);
-    }
-
-    // latency line (top half)
-    if (lat.length > 1) {
-      bwx.strokeStyle = "#9aa4c8"; bwx.lineWidth = 1; bwx.globalAlpha = 0.7;
-      bwx.beginPath();
-      lat.forEach((p, i) => {
-        const x = X(p[0]), y = midY - half * Math.min(1, p[1] / latMax);
-        i ? bwx.lineTo(x, y) : bwx.moveTo(x, y);
-      });
-      bwx.stroke();
+    bwx.textBaseline = "middle"; bwx.textAlign = "right";
+    for (const f of [1, 0.5, 0, -0.5, -1]) {
+      const y = midY - half * f;
+      bwx.strokeStyle = "#404040";
+      bwx.globalAlpha = f === 0 ? 0.7 : 0.26;
+      bwx.beginPath(); bwx.moveTo(padL, y); bwx.lineTo(rightX, y); bwx.stroke();
       bwx.globalAlpha = 1;
+      bwx.fillStyle = "#b6bfe0";
+      bwx.fillText(Math.round(bwMax * Math.abs(f)), padL - 5, y);
     }
+
+    const series = (arr, color, dir) => {
+      bwx.fillStyle = color;
+      const n = arr.length;
+      for (let i = Math.max(0, n - BW_WIN); i < n; i++) {
+        const x = rightX - (n - i) * slot;
+        if (x < padL - slot) continue;
+        const bh = Math.max(1, half * Math.min(1, arr[i] / bwMax));
+        bwx.fillRect(x, dir < 0 ? midY - bh : midY, bw, bh);
+      }
+    };
+    if (down.length) series(down, "#7dcfff", -1);
+    if (up.length) series(up, "#ff6ad5", 1);
   }
 
   function bwRenderOut() {
@@ -1119,7 +1101,7 @@
     }, BW.sampleMs);
     const latLoop = setInterval(async () => {
       const v = await bwPing();
-      if (v != null) { trace.loadedLat.push(v); trace.lat.push([(performance.now() - started) / 1000, v]); }
+      if (v != null) trace.loadedLat.push(v);
     }, BW.latMs);
     const stop = setTimeout(() => ac.abort(), BW.downMs);
     await Promise.all(Array.from({ length: BW.streams }, pump));
@@ -1154,7 +1136,7 @@
     }, BW.sampleMs);
     const latLoop = setInterval(async () => {
       const v = await bwPing();
-      if (v != null) { trace.loadedLat.push(v); trace.lat.push([(performance.now() - started + tOffsetS * 1000) / 1000, v]); }
+      if (v != null) trace.loadedLat.push(v);
     }, BW.latMs);
     const stop = setTimeout(() => { stopped = true; }, BW.upMs);
     await Promise.all(Array.from({ length: BW.upStreams }, stream));
@@ -1165,7 +1147,7 @@
 
   async function bwRun() {
     busy("#bw-run", "#bw-dot", true);
-    const trace = { down: [], up: [], lat: [], loadedLat: [], phase: "idle" };
+    const trace = { down: [], up: [], loadedLat: [], phase: "idle" };
     bwTrace = trace;
 
     $("#bw-cap").textContent = "idle latency…";

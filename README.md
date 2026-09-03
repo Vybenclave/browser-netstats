@@ -13,10 +13,10 @@ one-lines every tool.
 | Tool | Where it runs |
 | ---- | ------------- |
 | **Connection** | direct fetches to the Cloudflare edge |
-| **NAT type** | WebRTC + public STUN, in your browser |
 | **Bandwidth** | streamed up/down to the Cloudflare edge |
-| **Latency matrix** | in your browser, to ~10 public anycast endpoints |
 | **Ping** | timed in your browser (HTTPS round-trip) |
+| **NAT type** | WebRTC + public STUN, in your browser |
+| **Latency matrix** | in your browser, to ~10 public anycast endpoints |
 | **DNS lookup** | on a [Globalping](https://globalping.io) probe (pick the resolver) |
 | **Traceroute** | on a Globalping probe |
 | **Web probe** | on a Globalping probe |
@@ -51,12 +51,12 @@ These run entirely from the browser:
 - **Bandwidth** - 4 parallel streamed down + 3 looping XHR up streams to
   `speed.cloudflare.com`, run **sustained** (~20 s down / ~12 s up) so the
   headline number is a representative rate, not a slow-start burst (the mean of
-  samples past a 3 s warm-up). **btop-style bar trace**: each 250 ms sample is a
-  column - download grows up from the centre line (cyan), upload grows down
-  (magenta), with a faint latency line on a right-hand ms axis. **Bufferbloat**
-  grade = loaded median RTT − idle median. Fast links stop at ~1.6 GB down /
-  500 MB up. Every run is appended to a **log** in `localStorage` - last 8 in a
-  table, **Share log** exports CSV (`iso_time, down_mbps, up_mbps,
+  samples past a 3 s warm-up). **btop-style bar trace**: newest 250 ms sample at
+  the right edge, scrolling left; download grows up from the centre line (cyan),
+  upload grows down at the same slots (magenta), mirrored. **Bufferbloat** grade
+  = loaded median RTT − idle median (measured, not drawn). Fast links stop at
+  ~1.6 GB each way. Every run is appended to a **log** in `localStorage` - last 8
+  in a table, **Share log** exports CSV (`iso_time, down_mbps, up_mbps,
   latency_idle_ms, latency_loaded_ms, bufferbloat_ms, jitter_ms, cf_edge`),
   **Clear log** wipes it.
 - **NAT type** - `RTCPeerConnection` against Google + Cloudflare STUN: public
